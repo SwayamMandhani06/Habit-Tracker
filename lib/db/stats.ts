@@ -1,6 +1,7 @@
 // lib/db/stats.ts — All stat calculations (server-only)
 import { createServerClient } from '@/lib/supabase/server'
 import type { DashboardStats, DailyScore, HabitMonthlyStat } from '@/lib/supabase/types'
+import { toAppDateString } from './entries'
 
 export async function getDailyScores(limit?: number): Promise<DailyScore[]> {
   const db = createServerClient()
@@ -29,7 +30,7 @@ export async function getDailyScoreForDate(date: string): Promise<DailyScore | n
 export async function getDailyScoresForMonth(year: number, month: number): Promise<DailyScore[]> {
   const db = createServerClient()
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const endDate = new Date(year, month, 0).toLocaleDateString('en-CA')
+  const endDate = toAppDateString(new Date(year, month, 0))
   const { data, error } = await db
     .from('daily_scores')
     .select('*')
@@ -47,11 +48,11 @@ function computeStreaks(scores: DailyScore[]): { currentStreak: number; longestS
   let currentStreak = 0
   const today = new Date()
   const checkDate = new Date(today)
-  const todayStr = today.toLocaleDateString('en-CA')
+  const todayStr = toAppDateString(today)
   if (!perfectDays.has(todayStr)) checkDate.setDate(checkDate.getDate() - 1)
 
   while (true) {
-    const dateStr = checkDate.toLocaleDateString('en-CA')
+    const dateStr = toAppDateString(checkDate)
     if (perfectDays.has(dateStr)) {
       currentStreak++
       checkDate.setDate(checkDate.getDate() - 1)
@@ -92,7 +93,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-  const sevenDaysAgoStr = sevenDaysAgo.toLocaleDateString('en-CA')
+  const sevenDaysAgoStr = toAppDateString(sevenDaysAgo)
   const weeklyScores = allScores.filter(s => s.date >= sevenDaysAgoStr)
   const weeklyAvgPct = weeklyScores.length > 0
     ? weeklyScores.reduce((sum, s) => sum + Number(s.completion_pct), 0) / weeklyScores.length
