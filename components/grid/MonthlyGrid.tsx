@@ -1,12 +1,11 @@
 'use client'
 // components/grid/MonthlyGrid.tsx — Digitized paper habit tracker grid
-import { useState, useCallback } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react'
 import type { Habit, DayEntry, DailyScore } from '@/lib/supabase/types'
 import { toggleHabitCompletionAction } from '@/actions/completion.actions'
-import { getOrCreateDayEntry } from '@/lib/db/entries'
 
 interface Props {
   year: number
@@ -28,16 +27,26 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
   const daysInMonth = new Date(year, month, 0).getDate()
 
   // Build entry map: date → entry id
-  const entryMap = new Map(entries.map(e => [e.date, e]))
+  const entryMap = useMemo(
+    () => new Map(entries.map(e => [e.date, e])),
+    [entries]
+  )
 
   // Build completion map: `${entryId}__${habitId}` → boolean
-  const [compMap, setCompMap] = useState<Map<string, boolean>>(() => {
+  // MUST use useMemo (not useState lazy init) so it rebuilds when the user
+  // navigates between months via client-side routing — useState's lazy
+  // initializer only runs once on mount, leaving a stale map from the
+  // previous month that causes checkmarks to disappear.
+  const [localOverrides, setLocalOverrides] = useState<Map<string, boolean>>(new Map())
+  const compMap = useMemo(() => {
     const m = new Map<string, boolean>()
     for (const c of completionData.habitCompletions) {
       m.set(`${c.day_entry_id}__${c.habit_id}`, c.is_completed)
     }
+    // Apply any optimistic local overrides on top
+    for (const [k, v] of localOverrides) m.set(k, v)
     return m
-  })
+  }, [completionData, localOverrides])
 
   // Build score map: date → score
   const scoreMap = new Map(scores.map(s => [s.date, s]))
@@ -59,8 +68,8 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
     const entry = entryMap.get(dateStr)
     const entryId = entry?.id
 
-    // If no entry exists, we need to create it server-side
     if (!entryId) {
+      // No entry yet — create it server-side then refresh props
       await toggleHabitCompletionAction({ date: dateStr, habitId, isCompleted: true })
       router.refresh()
       return
@@ -70,9 +79,14 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
     const current = compMap.get(key) ?? false
     const next = !current
 
-    // Optimistic
-    setCompMap(prev => new Map(prev).set(key, next))
-    await toggleHabitCompletionAction({ date: dateStr, habitId, isCompleted: next })
+    // Optimistic override via localOverrides so useMemo recomputes compMap
+    setLocalOverrides(prev => new Map(prev).set(key, next))
+    toggleHabitCompletionAction({ date: dateStr, habitId, isCompleted: next }).then(res => {
+      if (res?.error) {
+        // Roll back on failure
+        setLocalOverrides(prev => new Map(prev).set(key, current))
+      }
+    })
   }, [compMap, entryMap, year, month, today, router])
 
   const prevMonth = () => {
@@ -216,7 +230,7 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
                     textAlign: 'center',
                     fontSize: '0.75rem',
                     fontWeight: 500,
-                    color: consistency >= 80 ? 'var(--sage)' : consistency >= 50 ? 'var(--accent)' : 'var(--ink-tertiary)',
+                    color: consistency >= 80 ? 'var(--accent)' : consistency >= 50 ? 'var(--ink-secondary)' : 'var(--ink-tertiary)',
                   }}>
                     {consistency}%
                   </td>
@@ -249,7 +263,7 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
                     textAlign: 'center',
                     fontSize: '0.65rem',
                     fontWeight: 600,
-                    color: pct === 100 ? 'var(--sage)' : pct && pct >= 50 ? 'var(--accent)' : 'var(--ink-tertiary)',
+                    color: pct === 100 ? 'var(--accent)' : pct && pct >= 50 ? 'var(--ink-secondary)' : 'var(--ink-tertiary)',
                   }}>
                     {pct !== null ? pct : ''}
                   </td>

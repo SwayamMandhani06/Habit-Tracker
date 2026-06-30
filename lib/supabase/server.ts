@@ -20,5 +20,14 @@ export function createServerClient(): TypedSupabaseClient {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: {
+      // Disable Next.js data-cache for ALL Supabase fetches.
+      // Without this, Next.js 15 may cache fetch responses and serve stale
+      // stats (yesterday's completion %, last month's totals, etc.) even on
+      // force-dynamic pages. cache:'no-store' ensures every request hits
+      // Supabase fresh.
+      fetch: (input, init) =>
+        fetch(input, { ...init, cache: 'no-store' }),
+    },
   })
 }

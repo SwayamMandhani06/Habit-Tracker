@@ -82,7 +82,7 @@ function computeStreaks(scores: DailyScore[]): { currentStreak: number; longestS
 
 export async function getDashboardStats(): Promise<DashboardStats> {
   const db = createServerClient()
-  const today = new Date().toLocaleDateString('en-CA')
+  const today = toAppDateString(new Date())
 
   const allScores = await getDailyScores()
 

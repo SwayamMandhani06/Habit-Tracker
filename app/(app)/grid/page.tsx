@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import type { Metadata } from 'next'
-import { getActiveHabits, getHabitsWithSubitems } from '@/lib/db/habits'
+import { getActiveHabits, getAllHabits } from '@/lib/db/habits'
 import { getDayEntriesForMonth } from '@/lib/db/entries'
 import { getCompletionsForMonth } from '@/lib/db/completions'
 import { getDailyScoresForMonth } from '@/lib/db/stats'
@@ -19,11 +19,18 @@ export default async function GridPage({
   const params = await searchParams
   const today = todayDate()
   const todayDate_ = new Date(today + 'T00:00:00')
-  const year = parseInt(params.year ?? String(todayDate_.getFullYear()))
-  const month = parseInt(params.month ?? String(todayDate_.getMonth() + 1))
+  const currentYear  = todayDate_.getFullYear()
+  const currentMonth = todayDate_.getMonth() + 1
+  const year  = parseInt(params.year  ?? String(currentYear))
+  const month = parseInt(params.month ?? String(currentMonth))
+
+  // Use getAllHabits (including archived) for past months so habits that were
+  // later archived still appear in the grid for the month they were tracked.
+  // For the current month, filter to active only.
+  const isPastMonth = year < currentYear || (year === currentYear && month < currentMonth)
 
   const [habits, entries, completionData, scores] = await Promise.all([
-    getActiveHabits(),
+    isPastMonth ? getAllHabits() : getActiveHabits(),
     getDayEntriesForMonth(year, month),
     getCompletionsForMonth(year, month),
     getDailyScoresForMonth(year, month),

@@ -1,6 +1,7 @@
 // lib/db/completions.ts — Completion toggling (server-only)
 import { createServerClient } from '@/lib/supabase/server'
 import type { DayCompletionState } from '@/lib/supabase/types'
+import { toAppDateString } from './entries'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function db() { return createServerClient() as any }
@@ -52,7 +53,7 @@ export async function getCompletionsForMonth(year: number, month: number): Promi
   subitemCompletions: Array<{ day_entry_id: string; subitem_id: string; is_completed: boolean }>
 }> {
   const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const endDate = new Date(year, month, 0).toLocaleDateString('en-CA')
+  const endDate = toAppDateString(new Date(year, month, 0))
 
   const { data: entries } = await db()
     .from('day_entries')

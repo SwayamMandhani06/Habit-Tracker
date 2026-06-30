@@ -37,7 +37,7 @@ export function CalendarView({ scores, habits, today }: Props) {
 
   const getCellStyle = (pct: number | undefined): React.CSSProperties => {
     if (pct === undefined) return { background: 'transparent' }
-    if (pct >= 100) return { background: 'var(--sage-subtle)', borderColor: 'var(--sage-muted)' }
+    if (pct >= 100) return { background: 'var(--accent-subtle)', borderColor: 'var(--accent-muted)' }
     if (pct >= 75)  return { background: `rgba(107,127,163,${0.10 + pct/100*0.15})` }
     if (pct >= 50)  return { background: `rgba(107,127,163,${0.06 + pct/100*0.10})` }
     if (pct >= 1)   return { background: `rgba(107,127,163,0.05)` }
@@ -124,7 +124,7 @@ export function CalendarView({ scores, habits, today }: Props) {
                   width: 3,
                   height: 3,
                   borderRadius: '50%',
-                  background: 'var(--sage)',
+                  background: 'var(--accent)',
                 }} />
               )}
             </motion.button>
@@ -135,7 +135,7 @@ export function CalendarView({ scores, habits, today }: Props) {
       {/* Legend */}
       <div style={{ display: 'flex', gap: '16px', marginTop: '16px', flexWrap: 'wrap' }}>
         {[
-          { label: 'Perfect', color: 'var(--sage-subtle)', border: 'var(--sage-muted)' },
+          { label: 'Perfect', color: 'var(--accent-subtle)', border: 'var(--accent-muted)' },
           { label: '75%+', color: 'rgba(107,127,163,0.22)' },
           { label: '50%+', color: 'rgba(107,127,163,0.13)' },
           { label: 'Any', color: 'rgba(107,127,163,0.05)' },

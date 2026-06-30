@@ -135,7 +135,7 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
             </h2>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span className="text-mono" style={{ fontSize: '1.25rem', fontWeight: 300, color: pct >= 100 ? 'var(--sage)' : 'var(--accent)' }}>
+            <span className="text-mono" style={{ fontSize: '1.25rem', fontWeight: 300, color: pct >= 100 ? 'var(--accent)' : 'var(--accent)' }}>
               {pct}%
             </span>
             <button className="btn-icon" onClick={onClose} aria-label="Close">
@@ -172,7 +172,7 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
               </div>
               <div className="card card-sm">
                 <p style={{ fontSize: '0.75rem', color: 'var(--ink-tertiary)', marginBottom: '8px' }}>Energy</p>
-                <SignalBarSelector value={energy} onChange={handleEnergyChange} color="var(--sage)" />
+                <SignalBarSelector value={energy} onChange={handleEnergyChange} />
               </div>
             </div>
 

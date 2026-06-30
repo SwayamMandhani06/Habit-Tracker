@@ -115,8 +115,8 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
           {!habit.is_archived && (
             <span style={{
               fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase',
-              color: habit.type === 'checklist' ? 'var(--sage)' : 'var(--ink-tertiary)',
-              background: habit.type === 'checklist' ? 'var(--sage-glow)' : 'var(--bg-surface-3)',
+              color: habit.type === 'checklist' ? 'var(--accent)' : 'var(--ink-tertiary)',
+              background: habit.type === 'checklist' ? 'var(--accent-glow)' : 'var(--bg-surface-3)',
               padding: '2px 8px', borderRadius: '99px',
             }}>
               {habit.type}

@@ -76,20 +76,34 @@ export function TodayClient({ date, entry, habits, completions }: Props) {
     })
   }, [date, debouncedMood, debouncedEnergy, debouncedSleep, debouncedWeight, debouncedScreenTime, debouncedNotes])
 
-  const handleToggleHabit = useCallback(async (habitId: string) => {
-    const next = !(habitComps[habitId] ?? false)
-    setHabitComps(prev => ({ ...prev, [habitId]: next }))
-    await toggleHabitCompletionAction({ date, habitId, isCompleted: next })
+  const handleToggleHabit = useCallback((habitId: string) => {
+    const prev = habitComps[habitId] ?? false
+    const next = !prev
+    // Optimistic update — immediate
+    setHabitComps(c => ({ ...c, [habitId]: next }))
+    // Fire-and-forget background sync; roll back on failure
+    toggleHabitCompletionAction({ date, habitId, isCompleted: next }).then(res => {
+      if (res?.error) setHabitComps(c => ({ ...c, [habitId]: prev }))
+    })
   }, [habitComps, date])
 
-  const handleToggleSubitem = useCallback(async (habitId: string, subitemId: string, allSubitemIds: string[]) => {
-    const next = !(subitemComps[subitemId] ?? false)
+  const handleToggleSubitem = useCallback((habitId: string, subitemId: string, allSubitemIds: string[]) => {
+    const prev = subitemComps[subitemId] ?? false
+    const next = !prev
+    const prevHabitComp = habitComps[habitId] ?? false
     const updatedSubComps = { ...subitemComps, [subitemId]: next }
-    setSubitemComps(updatedSubComps)
     const allDone = allSubitemIds.every(id => updatedSubComps[id] === true)
-    setHabitComps(prev => ({ ...prev, [habitId]: allDone }))
-    await toggleSubitemCompletionAction({ date, habitId, subitemId, isCompleted: next, allSubitemIds, currentSubitemCompletions: updatedSubComps })
-  }, [subitemComps, date])
+    // Optimistic update — immediate
+    setSubitemComps(updatedSubComps)
+    setHabitComps(c => ({ ...c, [habitId]: allDone }))
+    // Fire-and-forget background sync; roll back on failure
+    toggleSubitemCompletionAction({ date, habitId, subitemId, isCompleted: next, allSubitemIds, currentSubitemCompletions: updatedSubComps }).then(res => {
+      if (res?.error) {
+        setSubitemComps(c => ({ ...c, [subitemId]: prev }))
+        setHabitComps(c => ({ ...c, [habitId]: prevHabitComp }))
+      }
+    })
+  }, [subitemComps, habitComps, date])
 
   const prevPctRef = { current: pct }
   useEffect(() => {

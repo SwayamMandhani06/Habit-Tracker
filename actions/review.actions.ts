@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { verifySession } from '@/lib/auth/session'
 import { createServerClient } from '@/lib/supabase/server'
 import { getHabitMonthlyStats } from '@/lib/db/stats'
+import { toAppDateString } from '@/lib/db/entries'
 import type { MonthReview, HabitMonthlyStat, DailyScore } from '@/lib/supabase/types'
 import { z } from 'zod'
 
@@ -30,7 +31,7 @@ export async function upsertMonthReviewAction(input: z.infer<typeof upsertSchema
     const worstHabit = stats[stats.length - 1] as HabitMonthlyStat | undefined
 
     const startDate = `${r.data.year}-${String(r.data.month).padStart(2, '0')}-01`
-    const endDate = new Date(r.data.year, r.data.month, 0).toLocaleDateString('en-CA')
+    const endDate = toAppDateString(new Date(r.data.year, r.data.month, 0))
 
     const { data: scores } = await db
       .from('daily_scores')
