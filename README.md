@@ -1,175 +1,178 @@
-# 1% Better — Personal Habit Tracker
+# 1% Better — Personal Discipline & Habit System
 
-> Getting 1% better every day.
+> *"You do not rise to the level of your goals. You fall to the level of your systems."* — James Clear
 
-A premium, single-user habit tracker PWA built with Next.js 16, TypeScript, Tailwind CSS, Framer Motion, Supabase, and Recharts. Designed for daily use on both mobile and desktop, with a calm, paper-and-terminal-inspired design system: monospace typography, hairline dividers, a faint dotted-notebook background, and a single muted accent color.
+A high-craft, distraction-free personal discipline system and habit tracker Progressive Web App (PWA) built with **Next.js 15 (App Router)**, **React 19**, **TypeScript**, **Tailwind CSS v4**, **Framer Motion**, **Supabase (PostgreSQL with RLS)**, and **Recharts**.
 
-This is a personal tool, not a multi-user product — built to replace a printed monthly paper habit tracker with a flexible, statistics-driven digital version.
+Designed in an editorial paper-and-terminal aesthetic: monospace typography, hairline dividers, warm paper / deep obsidian palette, and a single muted sage green accent.
 
-## Features
+---
 
-- **PIN lock screen** — secure, phone-style 4-digit keypad (PIN stored server-side only, never in code or git)
-- **Fully flexible habits** — add, rename, reorder, archive, and convert habits between simple checkbox and multi-step checklist types, live from Settings, no redeploy required
-- **Today check-in** — tap to complete habits, auto-save wellbeing data (mood, energy, sleep, weight, screen time, notes); designed to take 2–3 minutes
-- **Checklist habits** — expandable sub-items (e.g. Morning Routine, Night Routine) that auto-sync parent habit completion
-- **Monthly Grid** — digitized paper habit tracker grid with sticky columns and a bottom score row, matching the original physical tracker layout
-- **Calendar view** — heat-map shading by daily completion %, click any day to view or edit its full entry
-- **Dashboard** — animated stats: today/weekly/monthly progress, current streak, longest streak, perfect days, overall completion %, daily rotating quote
-- **Insights** — line + bar charts, perfect/missed days, best/worst performance runs
-- **Monthly Review** — reflection journal with auto-calculated stats (best/worst habit, consistency rates), goals carry forward automatically into the next month
-- **Settings** — habit CRUD with drag-and-drop reorder, quotes manager, theme toggle
-- **PWA** — installable to home screen, standalone full-screen mode, dark/light theme
+## Highlights & Features
+
+### 1. Minimalist Homepage & Interaction Showcase
+- **Editorial Hero**: ProductiveApp-inspired layout with interactive headline typography in *Instrument Serif* italic and 100% private tenant isolation badges.
+- **3D iPhone Hero Console**: Realistic interactive mockup with Dynamic Island, 7-day completion rings, and live habit steppers with audio chime feedback.
+- **5-Screen Streak Showcase**:
+  - *An Amount Habit*: Water tracker with 8 interactive capacity glasses, intake trendline, and streak summary tiles.
+  - *Minimal Style*: Category pills and high-density habit rows with 5-day (`Wed Thu Fri Sat Sun`) completion pill strips.
+  - *Flip & Ring Clock*: Dedicated focus timer featuring split-card mechanical flip digits and circular ambient SVG progress rings.
+  - *Calendar & Notes*: Monthly heatmaps paired with evening reflection journaling (`Note | Planned | Completed`).
+  - *Habits Compared & Consistency*: Donut volume distribution, habit ranking velocities, 30-day consistency gauge, and day-of-week bar charts.
+
+### 2. Multi-Tenant Security & Supabase Row Level Security (RLS)
+- Full multi-user isolation powered by PostgreSQL RLS (`auth.uid() = user_id`) across all tables and security-invoker views (`daily_scores`, `habit_monthly_stats`).
+- Seamless Supabase Authentication supporting Email/Password and OAuth with automatic token refresh in Next.js middleware.
+
+### 3. Flexible Habit System
+- **Checkbox & Multi-Step Checklist Habits**: Subitems auto-sync with the parent habit.
+- **Rest-Day Skipping**: Mark habits as skipped on rest days without penalizing completion rates or breaking streaks.
+- **Habit Notes**: Markdown-supported personal context attached to any habit.
+- **Settings Manager**: Full CRUD with drag-and-drop reordering, archive, restore, and permanent delete actions.
+
+### 4. Daily Check-in & Distraction-Free Flow
+- **Fast 2-Minute Logging**: Habit completion status + wellbeing metrics (mood, energy, sleep hours, weight, screen time, and freeform notes).
+- **Dual View Modes on `/today`**: Switch instantly between *Classic* view and the compact *Minimal 5-Day Strip* for rapid multi-day status tracking.
+- **Built-In Focus Timer**: 15m to 90m customizable Pomodoro & meditation timer with audio cues and auto-completion.
+- **Weekly Intentions**: Focus prompt pinned to the top of every week.
+
+### 5. Analytics & Review
+- **Dashboard**: Live completion gauge, weekly/monthly averages, current & best streaks, perfect days count, and daily rotating Stoic discipline quotes.
+- **Monthly Grid**: Digitized paper habit tracker grid with sticky columns, weekend highlights, and completion score footers.
+- **Heatmap Calendar**: Daily completion percentage shading with one-click full-day entry modals.
+- **Monthly Review Journal**: End-of-month reflection workspace with automated wins, bottlenecks, and forward-looking intentions.
+
+---
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|------------|
-| Framework | Next.js 16 (App Router) + TypeScript |
-| Styling | Tailwind CSS + Vanilla CSS tokens |
-| Animation | Framer Motion |
-| Database | Supabase (Postgres) |
-| Auth | iron-session (httpOnly cookie, PIN) |
-| Charts | Recharts |
-| Drag & Drop | @dnd-kit |
-| Validation | Zod |
-| Deployment | Vercel |
+|---|---|
+| **Framework** | Next.js 15.5 (App Router, Server Actions) |
+| **Language** | TypeScript (Strict mode, zero `any` policy) |
+| **Styling** | Tailwind CSS v4, Vanilla CSS design tokens |
+| **Animations** | Framer Motion |
+| **Database** | PostgreSQL on Supabase with Row Level Security |
+| **Authentication** | `@supabase/ssr` with cookie session handling |
+| **Data Visualization** | Recharts & SVG custom meters |
+| **Drag and Drop** | `@dnd-kit/core` & `@dnd-kit/sortable` |
+| **Validation** | Zod |
+| **PWA** | Web Manifest, standalone display, responsive touch targets |
 
-## Setup
-
-### 1. Clone and Install
-
-```bash
-git clone <your-repo>
-cd habit-tracker
-npm install
-```
-
-### 2. Create Supabase Project
-
-1. Go to [supabase.com](https://supabase.com) and create a new project.
-2. In the SQL Editor, run the migration file: `supabase/migrations/001_initial_schema.sql`.
-
-### 3. Configure Environment Variables
-
-Copy the example file and fill in your own values:
-
-```bash
-cp .env.local.example .env.local
-```
-
-Edit `.env.local`:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT_ID.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-APP_PIN=choose-your-own-4-digit-pin
-SESSION_SECRET=your-very-long-random-secret-at-least-32-characters
-```
-
-- **`NEXT_PUBLIC_SUPABASE_URL`** — from Supabase Dashboard → Settings → API
-- **`SUPABASE_SERVICE_ROLE_KEY`** — from Supabase Dashboard → Settings → API (`service_role`, keep secret)
-- **`APP_PIN`** — your personal 4-digit lock PIN. Choose your own value here and in Vercel's environment variables; never commit a real PIN to a file tracked by git, even in a private repo.
-- **`SESSION_SECRET`** — generate with `openssl rand -base64 32`
-
-> **Security note:** `.env.local` is gitignored and must never be committed. The `APP_PIN` and `SESSION_SECRET` should exist only as environment variables — locally in `.env.local`, and in Vercel's Environment Variables dashboard for production. If you ever suspect either value has leaked, rotate both immediately.
-
-### 4. Run Locally
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) — you'll be redirected to the PIN screen.
-
-### 5. Seed Initial Data
-
-After entering your PIN and logging in, run the seed endpoint once to populate the default 13 habits and starter motivational quotes:
-
-```bash
-curl -X POST http://localhost:3000/api/seed \
-  -H "Cookie: hbt_session=<your-session-cookie>"
-```
-
-Or simply visit the app, log in, then open your browser's DevTools console and run:
-
-```javascript
-fetch('/api/seed', { method: 'POST' }).then(r => r.json()).then(console.log)
-```
-
-This only needs to be run once, on first setup. Re-running it should not duplicate existing habits/quotes (confirm this is idempotent before running it more than once).
-
-### 6. PWA Icons
-
-Place these files in `public/icons/`:
-- `icon-192.png` — 192×192px
-- `icon-512.png` — 512×512px
-- `icon-maskable.png` — 512×512px with safe zone padding
-- `apple-touch-icon.png` — 180×180px
-
-Generate them at [maskable.app](https://maskable.app) or [realfavicongenerator.net](https://realfavicongenerator.net).
-
-## Deploy to Vercel
-
-1. Push your repo to GitHub (keep it **private** — this app holds personal data).
-2. Import the repo into Vercel.
-3. Add all environment variables from `.env.local` in Vercel's Project → Settings → Environment Variables.
-4. Deploy.
-5. Open the deployed URL on your phone and use "Add to Home Screen" for the full PWA experience.
-
-After the first deploy, every `git push` to `main` triggers an automatic redeploy. Past deployments remain available in the Vercel dashboard for instant rollback if a change breaks something.
+---
 
 ## Project Structure
 
 ```
 habit-tracker/
-├── app/
-│   ├── (app)/           # Protected app routes
-│   │   ├── page.tsx     # Dashboard
-│   │   ├── today/       # Daily check-in
-│   │   ├── calendar/    # Calendar heat-map
-│   │   ├── grid/        # Monthly grid
-│   │   ├── insights/    # Analytics charts
-│   │   ├── review/      # Monthly review journal
-│   │   └── settings/    # Habit/quote management
-│   ├── (auth)/pin/      # PIN lock screen
-│   ├── api/             # Server-only API routes
-│   └── globals.css      # Design system tokens
-├── components/          # All React components
-├── lib/
-│   ├── auth/            # Session management
-│   ├── db/              # Supabase query functions
-│   └── supabase/        # Client + type definitions
-├── actions/             # Next.js Server Actions
-├── supabase/migrations/ # SQL schema
-└── proxy.ts             # Auth guard (Next.js 16)
+├── actions/                   # Next.js Server Actions with strict Zod validation
+│   ├── completion.actions.ts  # Habit & subitem toggles, skip actions
+│   ├── entry.actions.ts       # Day entry & wellbeing metric auto-save
+│   ├── habit.actions.ts       # Habit & subitem CRUD, reordering
+│   ├── intention.actions.ts   # Weekly intention persistence
+│   ├── quote.actions.ts       # Daily quote management
+│   └── review.actions.ts      # Monthly review reflections
+├── app/                       # Next.js App Router
+│   ├── (app)/                 # Protected application routes (Sidebar & Bottom Bar)
+│   │   ├── dashboard/         # Progress metrics, streaks, rotating quote
+│   │   ├── today/             # Daily check-in (Classic & Minimal views)
+│   │   ├── calendar/          # Heatmap calendar view
+│   │   ├── grid/              # Digitized physical monthly grid
+│   │   ├── insights/          # Deep statistical analysis & velocity charts
+│   │   ├── review/            # Monthly review journal
+│   │   └── settings/          # Habit manager, quotes, appearance
+│   ├── api/                   # Server API routes (auth signout, day-entry, seed)
+│   ├── auth/callback/         # Supabase OAuth redirect handler
+│   ├── login/ & signup/       # Authentication pages
+│   ├── globals.css            # Design tokens, themes, layered Tailwind v4
+│   ├── layout.tsx             # Root layout & Google Fonts preconnect
+│   └── manifest.ts            # PWA web manifest definition
+├── components/                # Modular React Client & Server Components
+│   ├── calendar/              # CalendarView, DayEntryModal
+│   ├── dashboard/             # DashboardClient, streak cards, progress meters
+│   ├── grid/                  # MonthlyGrid with sticky header & score footer
+│   ├── homepage/              # HomePageClient, HeroPhoneMockup, StreakShowcase
+│   ├── insights/              # InsightsClient with Recharts visualizations
+│   ├── nav/                   # Sidebar, BottomTabBar, ThemeToggle
+│   ├── review/                # MonthlyReviewClient
+│   ├── settings/              # HabitManager, QuotesManager, Appearance
+│   └── today/                 # TodayClient, HabitRow, FocusTimerModal, WeeklyIntention
+├── lib/                       # Core utilities & database access
+│   ├── auth/                  # Session verification & auth helpers
+│   ├── db/                    # User-scoped database query layer
+│   ├── supabase/              # Browser & SSR Supabase clients, schema types
+│   ├── audio.ts               # Synthesized audio chime via Web Audio API
+│   ├── date.ts                # Timezone-safe UTC date calculation helpers
+│   └── nav.ts                 # Shared navigation constants
+├── public/                    # PWA icons, screenshots, and static assets
+├── supabase/                  # Database schema & migrations
+│   └── migrations/            # SQL migrations 001 through 009 + 999 maintenance
+└── middleware.ts              # Route protection & Supabase session refresh
 ```
 
-## Design System
+---
 
-- **Typography:** single monospace font throughout (e.g. JetBrains Mono / IBM Plex Mono)
-- **Background:** pale neutral with a faint dotted-notebook texture, warm-charcoal equivalent in dark mode
-- **Color:** one muted accent color only, used sparingly for progress, streaks, and active states
-- **Structure:** thin hairline dividers and bracket/breadcrumb notation (`~/ dashboard`, `[ streak ]`) instead of heavy cards or shadows
-- **Motion:** short, spring-based "pop" animations on completion and load; a small line-art cat companion that reacts to the cursor on desktop and to taps on mobile
+## Getting Started
 
-## Screenshots
+### 1. Clone & Install Dependencies
 
-<p align="center">
-  <img src="public/screenshots/dashboard.png" alt="Dashboard view" width="80%" />
-</p>
-<p align="center">
-  <img src="public/screenshots/today.png" alt="Today check-in view" width="80%" />
-</p>
+```bash
+git clone https://github.com/your-username/habit-tracker.git
+cd habit-tracker
+npm install
+```
 
-## Data Model Notes
+### 2. Configure Environment Variables
 
-- Habits are fully editable records, not hardcoded — see `supabase/migrations/001_initial_schema.sql` for the `habits` / `habit_subitems` schema.
-- Archiving a habit removes it from future check-ins but preserves all historical completions; deletion is intentionally not supported to protect data integrity.
-- Daily completion % is calculated only against habits that were active on that specific date, so editing the habit list never retroactively changes past scores.
-- Streak = consecutive **Perfect Days** (100% of that day's active habits completed), not just days with any entry logged.
+Create `.env.local` using the provided template:
 
-## Philosophy
+```bash
+cp .env.local.example .env.local
+```
 
-> *"You don't rise to the level of your goals, you fall to the level of your systems."*
+Fill in your Supabase credentials:
 
-This app is a system. Use it every day.
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+APP_TIMEZONE=Asia/Kolkata
+```
+
+> **Note:** Set `APP_TIMEZONE` to your local IANA timezone (e.g. `America/New_York`, `Europe/London`, `Asia/Kolkata`). This ensures server-rendered dates match your local calendar regardless of server UTC time.
+
+### 3. Run Database Migrations
+
+In your Supabase project's **SQL Editor**, execute the migration files located in `supabase/migrations/`:
+- `001_initial_schema.sql` through `009_fix_views_rls_and_skips.sql`
+- Or run `999_ensure_all_columns_and_reload_cache.sql` to apply all schema updates and reload PostgREST in one step.
+
+### 4. Start Development Server
+
+```bash
+npm run dev
+```
+
+Visit [http://localhost:3000](http://localhost:3000) to view the homepage or log in.
+
+---
+
+## Production Deployment
+
+### Vercel Deployment
+1. Connect your repository to [Vercel](https://vercel.com).
+2. In Project Settings → **Environment Variables**, add the variables from `.env.local`.
+3. In Supabase Dashboard → **Authentication** → **URL Configuration**:
+   - Set **Site URL** to your production domain: `https://your-app.vercel.app`
+   - Add `https://your-app.vercel.app/auth/callback` to **Redirect URLs**.
+4. Deploy.
+
+### Progressive Web App (PWA)
+Open the deployed URL on mobile Safari (iOS) or Chrome (Android) and choose **"Add to Home Screen"** for standalone app mode.
+
+---
+
+## License
+
+MIT License. Designed and built with discipline for long-term consistency.
