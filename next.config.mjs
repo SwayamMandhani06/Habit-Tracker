@@ -1,6 +1,7 @@
 // next.config.mjs
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  devIndicators: false,
   // Headers for PWA static assets
   async headers() {
     return [
@@ -19,9 +20,6 @@ const nextConfig = {
       },
     ]
   },
-
-  // Exclude server-only modules from client bundles
-  serverExternalPackages: ['iron-session'],
 }
 
 export default nextConfig
