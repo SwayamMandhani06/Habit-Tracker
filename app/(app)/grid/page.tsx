@@ -17,7 +17,7 @@ export default async function GridPage({
   searchParams: Promise<{ year?: string; month?: string }>
 }) {
   const params = await searchParams
-  const today = todayDate()
+  const today = await todayDate()
   const todayDate_ = new Date(today + 'T00:00:00')
   const currentYear  = todayDate_.getFullYear()
   const currentMonth = todayDate_.getMonth() + 1

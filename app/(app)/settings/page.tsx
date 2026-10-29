@@ -5,12 +5,14 @@ import type { Metadata } from 'next'
 import { getAllHabits, getHabitSubitems } from '@/lib/db/habits'
 import { getAllQuotes } from '@/lib/db/quotes'
 import { SettingsClient } from '@/components/settings/SettingsClient'
+import { getSessionUser } from '@/lib/auth/session'
 import type { HabitWithSubitems } from '@/lib/supabase/types'
 
 export const metadata: Metadata = { title: '1% Better — Settings' }
 
 export default async function SettingsPage() {
-  const [habits, quotes] = await Promise.all([
+  const [user, habits, quotes] = await Promise.all([
+    getSessionUser(),
     getAllHabits(),
     getAllQuotes(),
   ])
@@ -25,6 +27,5 @@ export default async function SettingsPage() {
     subitems: subitemMap[h.id] ?? [],
   }))
 
-  return <SettingsClient habits={habitsWithSubitems} quotes={quotes} />
+  return <SettingsClient habits={habitsWithSubitems} quotes={quotes} userEmail={user?.email ?? null} />
 }
-

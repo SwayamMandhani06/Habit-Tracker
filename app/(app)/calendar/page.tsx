@@ -10,11 +10,12 @@ import { todayDate } from '@/lib/db/entries'
 export const metadata: Metadata = { title: '1% Better — Calendar' }
 
 export default async function CalendarPage() {
-  const [scores, habits] = await Promise.all([
+  const [scores, habits, today] = await Promise.all([
     getAllDailyScoresForCalendar(),
     getHabitsWithSubitems(),
+    todayDate(),
   ])
 
-  return <CalendarView scores={scores} habits={habits} today={todayDate()} />
+  return <CalendarView scores={scores} habits={habits} today={today} />
 }
 
