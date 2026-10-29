@@ -1,7 +1,7 @@
 'use server'
-// actions/entry.actions.ts
+// actions/entry.actions.ts — Unified Day Entry mutations (server-only)
 import { revalidatePath } from 'next/cache'
-import { verifySession } from '@/lib/auth/session'
+import { createServerClient } from '@/lib/supabase/server'
 import { getOrCreateDayEntry, updateDayEntry } from '@/lib/db/entries'
 import { z } from 'zod'
 
@@ -11,23 +11,36 @@ const updateSchema = z.object({
   energy: z.number().int().min(1).max(5).nullable().optional(),
   sleep_hours: z.number().min(0).max(24).nullable().optional(),
   weight_kg: z.number().min(0).max(500).nullable().optional(),
-  screen_time_minutes: z.number().int().min(0).nullable().optional(),
+  screen_time_minutes: z.number().int().min(0).max(1440).nullable().optional(),
   notes: z.string().max(5000).nullable().optional(),
 })
 
 export async function updateDayEntryAction(input: z.infer<typeof updateSchema>) {
-  if (!(await verifySession())) return { error: 'Unauthorized' }
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'Not authenticated' }
+  }
+
   const r = updateSchema.safeParse(input)
-  if (!r.success) return { error: 'Invalid input' }
+  if (!r.success) {
+    return { error: 'Invalid input' }
+  }
 
   try {
     const { date, ...updates } = r.data
     const entry = await getOrCreateDayEntry(date)
     await updateDayEntry(entry.id, updates)
+
+    // Revalidate all views that display day entry metrics so they never show stale data
     revalidatePath('/today')
-    revalidatePath('/')
+    revalidatePath('/dashboard')
     revalidatePath('/calendar')
+    revalidatePath('/grid')
     revalidatePath('/insights')
+    revalidatePath('/review')
+
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Failed to update entry' }

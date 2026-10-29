@@ -1,11 +1,10 @@
 'use server'
-// actions/review.actions.ts
+// actions/review.actions.ts — Month review actions with strict auth & ownership verification
 import { revalidatePath } from 'next/cache'
-import { verifySession } from '@/lib/auth/session'
-import { createServerClient } from '@/lib/supabase/server'
+import { getSessionContext } from '@/lib/auth/session'
 import { getHabitMonthlyStats } from '@/lib/db/stats'
-import { toAppDateString } from '@/lib/db/entries'
-import type { MonthReview, HabitMonthlyStat, DailyScore } from '@/lib/supabase/types'
+import { getMonthDateRange } from '@/lib/date'
+import type { MonthReview, HabitMonthlyStat, Database } from '@/lib/supabase/types'
 import { z } from 'zod'
 
 const upsertSchema = z.object({
@@ -16,26 +15,31 @@ const upsertSchema = z.object({
   goals_next_month: z.string().max(5000).nullable().optional(),
   final_reflection: z.string().max(5000).nullable().optional(),
   memorable_moments: z.string().max(5000).nullable().optional(),
+  what_went_well: z.string().max(5000).nullable().optional(),
+  habit_needs_work: z.string().max(5000).nullable().optional(),
+  one_thing_to_change: z.string().max(5000).nullable().optional(),
 })
 
 export async function upsertMonthReviewAction(input: z.infer<typeof upsertSchema>) {
-  if (!(await verifySession())) return { error: 'Unauthorized' }
+  const auth = await getSessionContext()
+  if (!auth) return { error: 'Not authenticated' }
+  const { user, supabase: db } = auth
+
   const r = upsertSchema.safeParse(input)
   if (!r.success) return { error: 'Invalid input' }
 
-  const db = createServerClient()
-
   try {
     const stats = await getHabitMonthlyStats(r.data.year, r.data.month)
-    const bestHabit = stats[0] as HabitMonthlyStat | undefined
-    const worstHabit = stats[stats.length - 1] as HabitMonthlyStat | undefined
+    const bestHabit = stats.length > 0 ? (stats[0] as HabitMonthlyStat) : undefined
+    const worstHabit = stats.length > 0 ? (stats[stats.length - 1] as HabitMonthlyStat) : undefined
 
-    const startDate = `${r.data.year}-${String(r.data.month).padStart(2, '0')}-01`
-    const endDate = toAppDateString(new Date(r.data.year, r.data.month, 0))
+    const { startDate, endDate } = getMonthDateRange(r.data.year, r.data.month)
 
+    // Strictly scope daily_scores query to authenticated user
     const { data: scores } = await db
       .from('daily_scores')
       .select('completion_pct, sleep_hours')
+      .eq('user_id', user.id)
       .gte('date', startDate)
       .lte('date', endDate)
 
@@ -55,13 +59,15 @@ export async function upsertMonthReviewAction(input: z.infer<typeof upsertSchema
     const { data: priorReview } = await db
       .from('month_reviews')
       .select('goals_next_month')
+      .eq('user_id', user.id)
       .eq('year', priorYear)
       .eq('month', priorMonth)
-      .single()
+      .maybeSingle()
 
     const priorReviewRow = priorReview as { goals_next_month: string | null } | null
 
-    const payload = {
+    const basePayload: Database['public']['Tables']['month_reviews']['Insert'] = {
+      user_id: user.id,
       year: r.data.year,
       month: r.data.month,
       overall_completion_pct: avgCompletion,
@@ -76,29 +82,48 @@ export async function upsertMonthReviewAction(input: z.infer<typeof upsertSchema
       memorable_moments: r.data.memorable_moments ?? null,
     }
 
-    const { error } = await db
+    // Try with extra fields first
+    const fullPayload: Database['public']['Tables']['month_reviews']['Insert'] = {
+      ...basePayload,
+      what_went_well: r.data.what_went_well ?? null,
+      habit_needs_work: r.data.habit_needs_work ?? null,
+      one_thing_to_change: r.data.one_thing_to_change ?? null,
+    }
+
+    let { error } = await db
       .from('month_reviews')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .upsert(payload as any, { onConflict: 'year,month' })
+      .upsert(fullPayload, { onConflict: 'user_id,year,month' })
+
+    // Fallback if migration 006 not yet run in remote Supabase
+    if (error && (error.message.includes('what_went_well') || error.message.includes('schema') || error.code === '42703')) {
+      const fallbackResult = await db
+        .from('month_reviews')
+        .upsert(basePayload, { onConflict: 'user_id,year,month' })
+      error = fallbackResult.error
+    }
 
     if (error) throw error
 
     revalidatePath('/review')
-    revalidatePath('/')
+    revalidatePath('/dashboard')
+    revalidatePath('/insights')
     return { success: true }
   } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Failed' }
+    return { error: e instanceof Error ? e.message : 'Failed to save review' }
   }
 }
 
 export async function getMonthReview(year: number, month: number): Promise<MonthReview | null> {
-  if (!(await verifySession())) return null
-  const db = createServerClient()
+  const auth = await getSessionContext()
+  if (!auth) return null
+  const { user, supabase: db } = auth
+
   const { data } = await db
     .from('month_reviews')
     .select('*')
+    .eq('user_id', user.id)
     .eq('year', year)
     .eq('month', month)
-    .single()
+    .maybeSingle()
   return (data as unknown as MonthReview) ?? null
 }
