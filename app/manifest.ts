@@ -8,8 +8,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Personal habit and discipline tracker. Getting 1% better every day.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#080808',
-    theme_color: '#080808',
+    background_color: '#F7F5F2',
+    theme_color: '#1A1815',
     orientation: 'portrait',
     categories: ['productivity', 'lifestyle'],
     icons: [

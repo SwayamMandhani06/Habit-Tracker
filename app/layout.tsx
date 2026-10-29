@@ -24,19 +24,43 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: dark)',  color: '#1C1A18' },
-    { media: '(prefers-color-scheme: light)', color: '#FAFAF8' },
+    { media: '(prefers-color-scheme: dark)',  color: '#1A1815' },
+    { media: '(prefers-color-scheme: light)', color: '#F7F5F2' },
   ],
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head />
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
+          rel="stylesheet"
+        />
+        {/* Client Timezone Sync: prevents midnight drift for non-UTC users */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                  if (tz) {
+                    var match = document.cookie.match(new RegExp('(?:^|; )x-user-timezone=([^;]*)'));
+                    var currentTz = match ? decodeURIComponent(match[1]) : null;
+                    if (currentTz !== tz) {
+                      document.cookie = 'x-user-timezone=' + encodeURIComponent(tz) + '; path=/; max-age=31536000; SameSite=Lax';
+                    }
+                  }
+                } catch(e) {}
+              })();
+            `,
+          }}
+        />
+      </head>
       <body>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
