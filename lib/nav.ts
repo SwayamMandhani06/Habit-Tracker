@@ -18,7 +18,7 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: '/',          label: 'Dashboard', icon: LayoutDashboard, showInBottomBar: true  },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, showInBottomBar: true  },
   { href: '/today',     label: 'Today',     icon: CheckSquare,     showInBottomBar: true  },
   { href: '/calendar',  label: 'Calendar',  icon: Calendar,        showInBottomBar: true  },
   { href: '/grid',      label: 'Grid',      icon: Grid3X3,         showInBottomBar: false },
