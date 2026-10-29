@@ -1,54 +1,74 @@
-// proxy.ts (Next.js 16: renamed from middleware.ts)
-// Protects all /(app)/* routes — redirects to /pin if no valid session
+// middleware.ts
+// Supabase Auth session refresh + route protection.
+// Uses @supabase/ssr to keep sessions alive and protect app routes.
 
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import type { SessionData } from '@/lib/auth/session'
-import { unsealData } from 'iron-session'
-
-const SESSION_COOKIE_NAME = 'hbt_session'
-
-async function isAuthenticated(request: NextRequest, secret: string): Promise<boolean> {
-  try {
-    const cookieValue = request.cookies.get(SESSION_COOKIE_NAME)?.value
-    if (!cookieValue) return false
-
-    const session = await unsealData<SessionData>(cookieValue, { password: secret })
-    return session.authenticated === true
-  } catch {
-    return false
-  }
-}
+import { createServerClient } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Public routes — always allowed
+  // ── Always-public routes ─────────────────────────────────────────────────
   if (
-    pathname.startsWith('/pin') ||
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/auth') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/icons') ||
+    pathname.startsWith('/screenshots') ||
     pathname === '/manifest.webmanifest' ||
     pathname === '/sw.js'
   ) {
     return NextResponse.next()
   }
 
-  const secret = process.env.SESSION_SECRET
-  if (!secret) {
-    return NextResponse.redirect(new URL('/pin', request.url))
+  // ── Supabase session refresh ──────────────────────────────────────────────
+  let supabaseResponse = NextResponse.next({ request })
+
+  // Synchronize Vercel edge geo timezone if client cookie not yet established
+  const vercelTz = request.headers.get('x-vercel-ip-timezone')
+  if (vercelTz && !request.cookies.get('x-user-timezone')) {
+    request.cookies.set('x-user-timezone', vercelTz)
+    supabaseResponse.cookies.set('x-user-timezone', vercelTz, {
+      path: '/',
+      maxAge: 31536000,
+      sameSite: 'lax',
+    })
   }
 
-  const authenticated = await isAuthenticated(request, secret)
-  if (!authenticated) {
-    const loginUrl = new URL('/pin', request.url)
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+          supabaseResponse = NextResponse.next({ request })
+          cookiesToSet.forEach(({ name, value, options }) =>
+            supabaseResponse.cookies.set(name, value, options)
+          )
+        },
+      },
+    }
+  )
+
+  // IMPORTANT: Do not run any code between createServerClient and getUser()
+  // that could cause the session to be stale.
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    const loginUrl = new URL('/login', request.url)
     loginUrl.searchParams.set('from', pathname)
     return NextResponse.redirect(loginUrl)
   }
 
-  return NextResponse.next()
+  return supabaseResponse
 }
 
 export const config = {
@@ -58,10 +78,13 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization)
      * - favicon.ico
-     * - /pin (login page)
-     * - /api/auth/* (auth routes)
-     * - public files
+     * - /icons
+     * - /screenshots
+     * - /manifest.webmanifest
+     * - / (public homepage)
+     * - /login (auth page)
+     * - /auth/* (auth callbacks)
      */
-    '/((?!_next/static|_next/image|favicon.ico|icons|manifest.webmanifest|sw.js|pin|api/auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icons|screenshots|manifest.webmanifest|sw.js).*)',
   ],
 }

@@ -1,72 +1,39 @@
 // lib/auth/session.ts
-// Secure httpOnly session cookie management using iron-session
-// APP_PIN and SESSION_SECRET are ONLY accessed server-side
+// Supabase Auth session helpers
+// All session state managed by Supabase Auth via @supabase/ssr
 
-import { cookies } from 'next/headers'
-import { getIronSession, SessionOptions } from 'iron-session'
+import { createServerClient } from '@/lib/supabase/server'
+import type { User } from '@supabase/supabase-js'
 
-export interface SessionData {
-  authenticated: boolean
-  authenticatedAt?: number
-}
-
-const SESSION_COOKIE_NAME = 'hbt_session'
-const SESSION_MAX_AGE = 60 * 60 * 24 * 30 // 30 days in seconds
-
-function getSessionOptions(): SessionOptions {
-  const secret = process.env.SESSION_SECRET
-  if (!secret || secret.length < 32) {
-    throw new Error('SESSION_SECRET must be set and at least 32 characters long')
-  }
-  return {
-    cookieName: SESSION_COOKIE_NAME,
-    password: secret,
-    cookieOptions: {
-      secure: process.env.NODE_ENV === 'production',
-      httpOnly: true,
-      maxAge: SESSION_MAX_AGE,
-      sameSite: 'lax',
-      path: '/',
-    },
-  }
-}
-
-export async function getSession() {
-  const cookieStore = await cookies()
-  return getIronSession<SessionData>(cookieStore, getSessionOptions())
-}
-
-export async function verifySession(): Promise<boolean> {
+// Returns the authenticated Supabase user, or null if not authenticated.
+// Use this in Server Actions and Server Components to check auth.
+export async function getSessionUser(): Promise<User | null> {
   try {
-    const session = await getSession()
-    return session.authenticated === true
+    const supabase = await createServerClient()
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error || !user) return null
+    return user
   } catch {
-    return false
+    return null
   }
 }
 
-export async function createSession(): Promise<void> {
-  const session = await getSession()
-  session.authenticated = true
-  session.authenticatedAt = Date.now()
-  await session.save()
+// Single-step helper that returns both the authenticated user and server client.
+// Eliminates redundant client-creation / double auth calls across Server Actions.
+export async function getSessionContext(): Promise<{ user: User; supabase: Awaited<ReturnType<typeof createServerClient>> } | null> {
+  try {
+    const supabase = await createServerClient()
+    const { data: { user }, error } = await supabase.auth.getUser()
+    if (error || !user) return null
+    return { user, supabase }
+  } catch {
+    return null
+  }
 }
 
-export async function destroySession(): Promise<void> {
-  const session = await getSession()
-  session.destroy()
-}
-
-export function verifyPin(inputPin: string): boolean {
-  const correctPin = process.env.APP_PIN
-  if (!correctPin) {
-    throw new Error('APP_PIN environment variable is not set')
-  }
-  // Constant-time comparison to prevent timing attacks
-  if (inputPin.length !== correctPin.length) return false
-  let diff = 0
-  for (let i = 0; i < inputPin.length; i++) {
-    diff |= inputPin.charCodeAt(i) ^ correctPin.charCodeAt(i)
-  }
-  return diff === 0
+// Convenience: returns true if there is an authenticated session.
+// Drop-in replacement for the old verifySession() used in all server actions.
+export async function verifySession(): Promise<boolean> {
+  const user = await getSessionUser()
+  return user !== null
 }
