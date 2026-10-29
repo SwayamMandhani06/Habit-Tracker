@@ -1,97 +1,136 @@
 // lib/db/entries.ts — Day entry CRUD (server-only)
 import { createServerClient } from '@/lib/supabase/server'
 import type { DayEntry } from '@/lib/supabase/types'
+import { getTodayInServerTimezone, getServerTimezone } from '@/lib/date.server'
+import { formatDateInTz, getMonthDateRange } from '@/lib/date'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function db() { return createServerClient() as any }
+export { getServerTimezone }
 
 /**
- * Returns today's date as YYYY-MM-DD in the app's configured timezone.
- *
- * On Vercel, Node.js always runs in UTC — so `new Date().toLocaleDateString()`
- * returns the UTC date, which is wrong for users east of UTC after midnight.
- *
- * Set APP_TIMEZONE in your Vercel environment variables (e.g. "Asia/Kolkata")
- * to get the correct local date server-side.
+ * Returns today's date as YYYY-MM-DD in the user's detected client/server timezone.
  */
-export function todayDate(): string {
-  const tz = process.env.APP_TIMEZONE ?? 'UTC'
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
+export async function todayDate(): Promise<string> {
+  return getTodayInServerTimezone()
 }
 
 /**
- * Converts any Date object to YYYY-MM-DD in the app timezone.
- * Use this instead of date.toLocaleDateString('en-CA') everywhere.
+ * Converts any Date object to YYYY-MM-DD in the specified timezone (or user timezone / UTC).
  */
-export function toAppDateString(date: Date): string {
-  const tz = process.env.APP_TIMEZONE ?? 'UTC'
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(date)
+export function toAppDateString(date: Date, timezone?: string): string {
+  const envTz = process.env.APP_TIMEZONE
+  return formatDateInTz(date, timezone ?? envTz ?? 'UTC')
 }
 
+export async function getDayEntry(date: string, userId?: string): Promise<DayEntry | null> {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) return null
 
-export async function getDayEntry(date: string): Promise<DayEntry | null> {
-  const { data, error } = await db()
+  if (userId && userId !== user.id) {
+    throw new Error('Forbidden: Cannot access day entry for another user')
+  }
+
+  const { data, error } = await supabase
     .from('day_entries')
     .select('*')
     .eq('date', date)
-    .single()
-  if (error?.code === 'PGRST116') return null
-  if (error) throw new Error(`getDayEntry: ${error.message}`)
-  return (data as DayEntry) ?? null
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (error && error.code !== 'PGRST116') {
+    throw new Error(`getDayEntry: ${error.message}`)
+  }
+  return (data as unknown as DayEntry) ?? null
 }
 
-export async function getOrCreateDayEntry(date: string): Promise<DayEntry> {
-  const existing = await getDayEntry(date)
-  if (existing) return existing
+export async function getOrCreateDayEntry(
+  date: string
+): Promise<DayEntry> {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
 
-  const { data, error } = await db()
+  // Try to get existing entry first
+  const { data: existing } = await supabase
     .from('day_entries')
-    .insert({ date })
+    .select('*')
+    .eq('date', date)
+    .eq('user_id', user.id)
+    .single()
+
+  if (existing) return existing as DayEntry
+
+  // Create new entry if none exists
+  const { data: created, error } = await supabase
+    .from('day_entries')
+    .insert({ date, user_id: user.id })
     .select()
     .single()
-  if (error) throw new Error(`getOrCreateDayEntry: ${error.message}`)
-  return data as DayEntry
+
+  if (error) {
+    // Handle race condition — another request may have 
+    // inserted between our select and insert
+    if (error.code === '23505') {
+      const { data: raceExisting } = await supabase
+        .from('day_entries')
+        .select('*')
+        .eq('date', date)
+        .eq('user_id', user.id)
+        .single()
+      if (raceExisting) return raceExisting as DayEntry
+    }
+    throw new Error(`getOrCreateDayEntry: ${error.message}`)
+  }
+
+  return created as DayEntry
 }
 
 export async function updateDayEntry(
   id: string,
   updates: Partial<Pick<DayEntry, 'mood' | 'energy' | 'sleep_hours' | 'weight_kg' | 'screen_time_minutes' | 'notes'>>
 ): Promise<void> {
-  const { error } = await db()
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (!user || authError) throw new Error('Not authenticated')
+
+  const { error } = await supabase
     .from('day_entries')
     .update(updates)
     .eq('id', id)
+    .eq('user_id', user.id)
+
   if (error) throw new Error(`updateDayEntry: ${error.message}`)
 }
 
 export async function getDayEntriesForMonth(year: number, month: number): Promise<DayEntry[]> {
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const endDate = toAppDateString(new Date(year, month, 0))
-  const { data, error } = await db()
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { startDate, endDate } = getMonthDateRange(year, month)
+  const { data, error } = await supabase
     .from('day_entries')
     .select('*')
+    .eq('user_id', user.id)
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: true })
+
   if (error) throw new Error(`getDayEntriesForMonth: ${error.message}`)
   return (data ?? []) as DayEntry[]
 }
 
 export async function getAllDayEntries(): Promise<DayEntry[]> {
-  const { data, error } = await db()
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
     .from('day_entries')
     .select('*')
+    .eq('user_id', user.id)
     .order('date', { ascending: true })
+
   if (error) throw new Error(`getAllDayEntries: ${error.message}`)
   return (data ?? []) as DayEntry[]
 }

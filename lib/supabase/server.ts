@@ -1,31 +1,66 @@
 // lib/supabase/server.ts
-// Service-role Supabase client — ONLY used in server-side code (Server Actions, Route Handlers)
-// Never imported from client components
+// Two Supabase clients:
+//   createServerClient() — user-scoped client via @supabase/ssr (respects RLS)
+//   createAdminClient()  — service-role client (bypasses RLS, admin use only)
 
+import { createServerClient as createSSRServerClient } from '@supabase/ssr'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
 import type { Database } from './types'
 
 export type TypedSupabaseClient = SupabaseClient<Database>
 
-export function createServerClient(): TypedSupabaseClient {
+// ── User-scoped client (respects RLS) ─────────────────────────────────────────
+// Use this for ALL user-facing data queries. Auth session is read from cookies.
+export async function createServerClient(): Promise<TypedSupabaseClient> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-  if (!url || !key) {
-    throw new Error('Missing Supabase environment variables (NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)')
+  if (!url || !anonKey) {
+    throw new Error('Missing Supabase env vars (NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY)')
   }
 
-  return createClient<Database>(url, key, {
+  const cookieStore = await cookies()
+
+  return createSSRServerClient<Database>(url, anonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll()
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            cookieStore.set(name, value, options)
+          )
+        } catch {
+          // setAll is called from Server Components where cookies are read-only.
+          // This is safe to ignore — the middleware handles session refresh.
+        }
+      },
+    },
+    global: {
+      fetch: (input, init) =>
+        fetch(input, { ...init, cache: 'no-store' }),
+    },
+  }) as unknown as TypedSupabaseClient
+}
+
+// ── Admin client (service-role, bypasses RLS) ──────────────────────────────────
+// ONLY use for explicit admin operations. Never for user-facing queries/routes.
+export function createAdminClient(): TypedSupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceKey) {
+    throw new Error('Missing Supabase env vars (NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY)')
+  }
+
+  return createClient<Database>(url, serviceKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
     global: {
-      // Disable Next.js data-cache for ALL Supabase fetches.
-      // Without this, Next.js 15 may cache fetch responses and serve stale
-      // stats (yesterday's completion %, last month's totals, etc.) even on
-      // force-dynamic pages. cache:'no-store' ensures every request hits
-      // Supabase fresh.
       fetch: (input, init) =>
         fetch(input, { ...init, cache: 'no-store' }),
     },

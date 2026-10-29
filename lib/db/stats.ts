@@ -1,13 +1,19 @@
-// lib/db/stats.ts — All stat calculations (server-only)
+// lib/db/stats.ts — All stat calculations with strict auth & user scoping (server-only)
 import { createServerClient } from '@/lib/supabase/server'
 import type { DashboardStats, DailyScore, HabitMonthlyStat } from '@/lib/supabase/types'
-import { toAppDateString } from './entries'
+import { CURATED_DISCIPLINE_QUOTES } from './quotes'
+import { toAppDateString, todayDate, getServerTimezone } from './entries'
+import { getMonthDateRange } from '@/lib/date'
 
 export async function getDailyScores(limit?: number): Promise<DailyScore[]> {
-  const db = createServerClient()
+  const db = await createServerClient()
+  const { data: { user } } = await db.auth.getUser()
+  if (!user) return []
+
   let query = db
     .from('daily_scores')
     .select('*')
+    .eq('user_id', user.id)
     .order('date', { ascending: false })
   if (limit) query = query.limit(limit)
   const { data, error } = await query
@@ -16,24 +22,30 @@ export async function getDailyScores(limit?: number): Promise<DailyScore[]> {
 }
 
 export async function getDailyScoreForDate(date: string): Promise<DailyScore | null> {
-  const db = createServerClient()
+  const db = await createServerClient()
+  const { data: { user } } = await db.auth.getUser()
+  if (!user) return null
+
   const { data, error } = await db
     .from('daily_scores')
     .select('*')
+    .eq('user_id', user.id)
     .eq('date', date)
-    .single()
-  if (error?.code === 'PGRST116') return null
-  if (error) throw new Error(`getDailyScoreForDate: ${error.message}`)
+    .maybeSingle()
+  if (error && error.code !== 'PGRST116') throw new Error(`getDailyScoreForDate: ${error.message}`)
   return (data as unknown as DailyScore) ?? null
 }
 
 export async function getDailyScoresForMonth(year: number, month: number): Promise<DailyScore[]> {
-  const db = createServerClient()
-  const startDate = `${year}-${String(month).padStart(2, '0')}-01`
-  const endDate = toAppDateString(new Date(year, month, 0))
+  const db = await createServerClient()
+  const { data: { user } } = await db.auth.getUser()
+  if (!user) return []
+
+  const { startDate, endDate } = getMonthDateRange(year, month)
   const { data, error } = await db
     .from('daily_scores')
     .select('*')
+    .eq('user_id', user.id)
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: true })
@@ -41,31 +53,72 @@ export async function getDailyScoresForMonth(year: number, month: number): Promi
   return (data ?? []) as unknown as DailyScore[]
 }
 
-function computeStreaks(scores: DailyScore[]): { currentStreak: number; longestStreak: number } {
+function computeStreaks(scores: DailyScore[], todayStrParam?: string): { currentStreak: number; longestStreak: number } {
   const sorted = [...scores].sort((a, b) => b.date.localeCompare(a.date))
-  const perfectDays = new Set(sorted.filter(s => Number(s.completion_pct) >= 100).map(s => s.date))
+
+  // Perfect day: 100% completion on at least 1 habit, with non-zero effective habits
+  const perfectDays = new Set(
+    sorted
+      .filter(s => Number(s.completion_pct) >= 100 && Number(s.total_active_habits) > 0 && Number(s.completed_habits) > 0)
+      .map(s => s.date)
+  )
+
+  // Rest day: all active habits were skipped (skipped_habits > 0 and total_active_habits === 0)
+  const restDays = new Set(
+    sorted
+      .filter(s => Number((s as any).skipped_habits ?? 0) > 0 && Number(s.total_active_habits) === 0)
+      .map(s => s.date)
+  )
 
   let currentStreak = 0
-  const today = new Date()
-  const checkDate = new Date(today)
-  const todayStr = toAppDateString(today)
-  if (!perfectDays.has(todayStr)) checkDate.setDate(checkDate.getDate() - 1)
+  const todayStr = todayStrParam ?? toAppDateString(new Date())
+  const checkDate = new Date(todayStr + 'T00:00:00')
+
+  // If today is neither perfect nor a rest day, start checking from yesterday
+  if (!perfectDays.has(todayStr) && !restDays.has(todayStr)) {
+    checkDate.setDate(checkDate.getDate() - 1)
+  }
 
   while (true) {
-    const dateStr = toAppDateString(checkDate)
+    const y = checkDate.getFullYear()
+    const m = String(checkDate.getMonth() + 1).padStart(2, '0')
+    const day = String(checkDate.getDate()).padStart(2, '0')
+    const dateStr = `${y}-${m}-${day}`
     if (perfectDays.has(dateStr)) {
       currentStreak++
       checkDate.setDate(checkDate.getDate() - 1)
-    } else break
+    } else if (restDays.has(dateStr)) {
+      // Skipped/rest day does NOT break current streak; bridge across it
+      checkDate.setDate(checkDate.getDate() - 1)
+    } else {
+      break
+    }
   }
 
-  const allDates = sorted.map(s => s.date).sort()
+  const allDates = [...new Set(sorted.map(s => s.date))].sort()
   let longestStreak = 0
   let currentRun = 0
   let prevDate: Date | null = null
 
   for (const dateStr of allDates) {
-    if (!perfectDays.has(dateStr)) { currentRun = 0; prevDate = null; continue }
+    if (restDays.has(dateStr)) {
+      // Rest day: if we are in an active streak, bridge across the rest day
+      if (prevDate) {
+        const date = new Date(dateStr + 'T00:00:00')
+        const diff = Math.round((date.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
+        if (diff === 1) {
+          prevDate = date
+        }
+      }
+      continue
+    }
+
+    if (!perfectDays.has(dateStr)) {
+      currentRun = 0
+      prevDate = null
+      continue
+    }
+
     const date = new Date(dateStr + 'T00:00:00')
     if (!prevDate) {
       currentRun = 1
@@ -81,19 +134,30 @@ function computeStreaks(scores: DailyScore[]): { currentStreak: number; longestS
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
-  const db = createServerClient()
-  const today = toAppDateString(new Date())
+  const db = await createServerClient()
+  const { data: { user } } = await db.auth.getUser()
+  const today = await todayDate()
+  const tz = await getServerTimezone()
 
   const allScores = await getDailyScores()
 
   const todayScore = allScores.find(s => s.date === today)
   const todayPct = todayScore ? Number(todayScore.completion_pct) : 0
   const todayCompleted = todayScore ? Number(todayScore.completed_habits) : 0
-  const todayTotal = todayScore ? Number(todayScore.total_active_habits) : 0
+  let todayTotal = todayScore ? Number(todayScore.total_active_habits) : 0
+
+  if (!todayScore && user) {
+    const { count } = await db
+      .from('habits')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('is_archived', false)
+    todayTotal = count ?? 0
+  }
 
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-  const sevenDaysAgoStr = toAppDateString(sevenDaysAgo)
+  const sevenDaysAgoStr = toAppDateString(sevenDaysAgo, tz)
   const weeklyScores = allScores.filter(s => s.date >= sevenDaysAgoStr)
   const weeklyAvgPct = weeklyScores.length > 0
     ? weeklyScores.reduce((sum, s) => sum + Number(s.completion_pct), 0) / weeklyScores.length
@@ -105,39 +169,66 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     ? monthlyScores.reduce((sum, s) => sum + Number(s.completion_pct), 0) / monthlyScores.length
     : 0
 
-  const perfectDaysCount = allScores.filter(s => Number(s.completion_pct) >= 100).length
+  const perfectDaysCount = allScores.filter(s => Number(s.completion_pct) >= 100 && Number(s.total_active_habits) > 0 && Number(s.completed_habits) > 0).length
   const overallCompletionPct = allScores.length > 0
     ? allScores.reduce((sum, s) => sum + Number(s.completion_pct), 0) / allScores.length
     : 0
 
-  const { currentStreak, longestStreak } = computeStreaks(allScores)
+  const { currentStreak, longestStreak } = computeStreaks(allScores, today)
 
-  // Today's quote (deterministic by date)
-  const { data: quotes } = await db
+  // Today's quote (deterministic by date, scoped to user quotes if present)
+  let quotesQuery = db
     .from('quotes')
     .select('text')
     .eq('is_active', true)
-    .order('created_at', { ascending: true })
+  if (user) {
+    quotesQuery = quotesQuery.eq('user_id', user.id)
+  }
+  const { data: quotes } = await quotesQuery.order('created_at', { ascending: true })
 
   let todayQuote: string | null = null
   const quoteRows = (quotes ?? []) as { text: string }[]
+  const daysSinceEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24))
   if (quoteRows.length > 0) {
-    const daysSinceEpoch = Math.floor(Date.now() / (1000 * 60 * 60 * 24))
     todayQuote = quoteRows[daysSinceEpoch % quoteRows.length].text
+  } else {
+    todayQuote = CURATED_DISCIPLINE_QUOTES[daysSinceEpoch % CURATED_DISCIPLINE_QUOTES.length]
   }
 
-  // Goals this month from last month's review
+  // Goals this month from last month's review (strictly scoped to user)
   const now = new Date()
   const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth()
   const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
-  const { data: lastReview } = await db
-    .from('month_reviews')
-    .select('goals_next_month')
-    .eq('year', lastMonthYear)
-    .eq('month', lastMonth)
-    .single()
 
-  const lastReviewRow = lastReview as { goals_next_month: string | null } | null
+  let lastReviewRow: { goals_next_month: string | null } | null = null
+  if (user) {
+    const { data: lastReview } = await db
+      .from('month_reviews')
+      .select('goals_next_month')
+      .eq('user_id', user.id)
+      .eq('year', lastMonthYear)
+      .eq('month', lastMonth)
+      .maybeSingle()
+    lastReviewRow = lastReview as { goals_next_month: string | null } | null
+  }
+
+  const DAY_INITIALS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+  const weeklySparkline: Array<{ day: string; date: string; pct: number }> = []
+  const baseDate = new Date(today + 'T00:00:00')
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(baseDate)
+    d.setDate(d.getDate() - i)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    const dateStr = `${y}-${m}-${day}`
+    const scoreRow = allScores.find(s => s.date === dateStr)
+    weeklySparkline.push({
+      day: DAY_INITIALS[d.getDay()],
+      date: dateStr,
+      pct: scoreRow ? Math.round(Number(scoreRow.completion_pct)) : 0,
+    })
+  }
 
   return {
     todayScore: todayCompleted,
@@ -151,14 +242,19 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     overallCompletionPct,
     todayQuote,
     goalsThisMonth: lastReviewRow?.goals_next_month ?? null,
+    weeklySparkline,
   }
 }
 
 export async function getHabitMonthlyStats(year: number, month: number): Promise<HabitMonthlyStat[]> {
-  const db = createServerClient()
+  const db = await createServerClient()
+  const { data: { user } } = await db.auth.getUser()
+  if (!user) return []
+
   const { data, error } = await db
     .from('habit_monthly_stats')
     .select('*')
+    .eq('user_id', user.id)
     .eq('year', year)
     .eq('month', month)
     .order('consistency_pct', { ascending: false })
