@@ -1,190 +1,407 @@
 'use client'
-// components/today/HabitRow.tsx
-import { useState } from 'react'
+// components/today/HabitRow.tsx — Habit row with spring checkbox pop, long-press/right-click skip menu
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Check } from 'lucide-react'
+import { ChevronDown, Check, Minus, Clock } from 'lucide-react'
 import type { HabitWithSubitems } from '@/lib/supabase/types'
 
 interface Props {
   habit: HabitWithSubitems
   isCompleted: boolean
+  isSkipped?: boolean
   subitemCompletions: Record<string, boolean>
   onToggle: () => void
+  onToggleSkip?: () => void
   onToggleSubitem: (subitemId: string, allIds: string[]) => void
+  onOpenTimer?: (habit: HabitWithSubitems) => void
+  minimalMode?: boolean
+  recentDays?: Array<{ date: string; dayLabel: string; dayNum: string; isToday: boolean }>
+  dayCompletions?: Record<string, boolean>
+  onToggleDay?: (date: string) => void
 }
 
-// Quick bounce sequence on check — typed correctly for Framer Motion v12
-const BOUNCE_KEYFRAMES = [1, 1.28, 0.95, 1.06, 1] as const
-const BOUNCE_TIMES    = [0, 0.3, 0.55, 0.75, 1]  as const
-
-export function HabitRow({ habit, isCompleted, subitemCompletions, onToggle, onToggleSubitem }: Props) {
+export function HabitRow({
+  habit,
+  isCompleted,
+  isSkipped = false,
+  subitemCompletions,
+  onToggle,
+  onToggleSkip,
+  onToggleSubitem,
+  onOpenTimer,
+  minimalMode = false,
+  recentDays = [],
+  dayCompletions = {},
+  onToggleDay,
+}: Props) {
   const [expanded, setExpanded] = useState(false)
   const [justChecked, setJustChecked] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const touchTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const isChecklist = habit.type === 'checklist'
-  const allSubitemIds = habit.subitems.map(s => s.id)
-  const completedSubitems = habit.subitems.filter(s => subitemCompletions[s.id] === true).length
+  const allSubitemIds = habit.subitems.map((s) => s.id)
+  const completedSubitems = habit.subitems.filter((s) => subitemCompletions[s.id] === true).length
 
   const handleToggle = () => {
-    if (!isCompleted) {
+    if (!isCompleted && !isSkipped) {
       setJustChecked(true)
-      setTimeout(() => setJustChecked(false), 400)
+      setTimeout(() => setJustChecked(false), 350)
     }
     onToggle()
   }
 
+  // Handle right-click (desktop)
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setShowMenu(true)
+  }
+
+  // Handle long-press (mobile touch)
+  const handleTouchStart = () => {
+    touchTimerRef.current = setTimeout(() => {
+      setShowMenu(true)
+    }, 500)
+  }
+
+  const handleTouchEnd = () => {
+    if (touchTimerRef.current) {
+      clearTimeout(touchTimerRef.current)
+    }
+  }
+
   return (
-    <motion.div
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 26 }}
-      style={{
-        borderRadius: 'var(--radius-lg)',
-        border: '1px solid',
-        borderColor: isCompleted ? 'var(--accent)' : 'var(--border-default)',
-        overflow: 'hidden',
-        background: isCompleted ? 'var(--accent-subtle)' : 'var(--bg-surface-1)',
-        transition: 'border-color 0.15s, background 0.15s',
-      }}
-    >
-      <div
+    <div className="relative">
+      <motion.div
+        whileHover={{ y: -1 }}
+        onContextMenu={handleContextMenu}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '11px 14px',
-          cursor: 'pointer',
-          userSelect: 'none',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid',
+          borderColor: isCompleted
+            ? 'var(--accent)'
+            : isSkipped
+            ? 'rgba(0,0,0,0.15)'
+            : 'var(--border)',
+          overflow: 'hidden',
+          backgroundColor: isCompleted
+            ? 'rgba(92, 107, 90, 0.08)'
+            : isSkipped
+            ? 'var(--surface-raised)'
+            : 'var(--surface)',
+          opacity: isSkipped ? 0.75 : 1,
+          transition: 'border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease',
         }}
-        onClick={isChecklist ? () => setExpanded(e => !e) : handleToggle}
       >
-        {/* Checkbox */}
-        <motion.button
-          onClick={e => { e.stopPropagation(); handleToggle() }}
-          className={`habit-checkbox ${isCompleted ? 'checked' : ''}`}
-          animate={justChecked
-            ? { scale: [...BOUNCE_KEYFRAMES], transition: { duration: 0.32, times: [...BOUNCE_TIMES], ease: 'easeOut' as const } }
-            : { scale: 1 }
-          }
-          aria-label={`Toggle ${habit.name}`}
-          style={{ flexShrink: 0 }}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            padding: '13px 16px',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+          onClick={isChecklist ? () => setExpanded((e) => !e) : handleToggle}
         >
-          <AnimatePresence>
-            {isCompleted && (
-              <motion.div
-                initial={{ scale: 0, rotate: -12 }}
-                animate={{ scale: 1, rotate: 0 }}
-                exit={{ scale: 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-              >
-                <Check size={12} color="white" strokeWidth={2.5} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.button>
-
-        {/* Name */}
-        <span style={{
-          flex: 1,
-          fontSize: '0.875rem',
-          fontFamily: 'var(--font-mono)',
-          fontWeight: 400,
-          letterSpacing: '0.01em',
-          color: isCompleted ? 'var(--ink-tertiary)' : 'var(--ink-primary)',
-          textDecoration: isCompleted ? 'line-through' : 'none',
-          textDecorationColor: 'var(--ink-disabled)',
-          transition: 'color 0.15s',
-        }}>
-          {habit.name}
-        </span>
-
-        {/* Checklist counter + chevron */}
-        {isChecklist && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <span style={{
-              fontSize: '0.6875rem',
-              fontFamily: 'var(--font-mono)',
-              color: completedSubitems === habit.subitems.length ? 'var(--accent)' : 'var(--ink-tertiary)',
-            }}>
-              {completedSubitems}/{habit.subitems.length}
-            </span>
-            <motion.div
-              animate={{ rotate: expanded ? 180 : 0 }}
-              transition={{ duration: 0.18 }}
-              style={{ color: 'var(--ink-tertiary)', display: 'flex' }}
-            >
-              <ChevronDown size={14} />
-            </motion.div>
-          </div>
-        )}
-      </div>
-
-      {/* Sub-items */}
-      <AnimatePresence>
-        {isChecklist && expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            style={{ overflow: 'hidden' }}
-          >
-            <div style={{
-              borderTop: '1px solid var(--border-subtle)',
-              padding: '6px 14px 10px',
+          {/* Checkbox with scale pop (0.85 → 1.1 → 1) with 44x44px accessible touch target */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation()
+              handleToggle()
+            }}
+            style={{
+              width: 44,
+              height: 44,
+              minWidth: 44,
+              minHeight: 44,
+              margin: '-12px -10px -12px -12px',
               display: 'flex',
-              flexDirection: 'column',
-              gap: 1,
-            }}>
-              {habit.subitems.map(subitem => {
-                const done = subitemCompletions[subitem.id] ?? false
-                return (
-                  <div
-                    key={subitem.id}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                      padding: '7px 4px',
-                      cursor: 'pointer',
-                      borderRadius: 'var(--radius-sm)',
-                    }}
-                    onClick={() => onToggleSubitem(subitem.id, allSubitemIds)}
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <motion.button
+              type="button"
+              className={`habit-checkbox ${isCompleted ? 'checked' : ''}`}
+              animate={
+                justChecked
+                  ? { scale: [0.85, 1.1, 1], transition: { duration: 0.3, type: 'spring', stiffness: 450, damping: 18 } }
+                  : { scale: 1 }
+              }
+              aria-label={`Toggle ${habit.name}`}
+              style={{
+                width: 20,
+                height: 20,
+                borderRadius: 'var(--radius-sm)',
+                border: `1.5px solid ${
+                  isCompleted
+                    ? 'var(--accent)'
+                    : isSkipped
+                    ? 'var(--text-muted)'
+                    : 'var(--border)'
+                }`,
+                backgroundColor: isCompleted
+                  ? 'var(--accent)'
+                  : isSkipped
+                  ? 'var(--surface-raised)'
+                  : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                padding: 0,
+              }}
+            >
+              <AnimatePresence>
+                {isCompleted && (
+                  <motion.div
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    exit={{ scale: 0, opacity: 0 }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 24 }}
                   >
-                    <motion.div
-                      className={`habit-checkbox ${done ? 'checked' : ''}`}
-                      style={{ width: 17, height: 17, flexShrink: 0 }}
-                      whileTap={{ scale: 0.88 }}
+                    <Check size={13} color="#FFFFFF" strokeWidth={2.5} />
+                  </motion.div>
+                )}
+                {isSkipped && !isCompleted && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    exit={{ scale: 0 }}
+                  >
+                    <Minus size={13} color="var(--text-muted)" strokeWidth={2.5} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.button>
+          </div>
+
+          {/* Habit Name */}
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+            <span
+              style={{
+                fontSize: '0.95rem',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 500,
+                letterSpacing: '0.01em',
+                color: isCompleted || isSkipped ? 'var(--text-muted)' : 'var(--text-primary)',
+                textDecoration: isCompleted ? 'line-through' : isSkipped ? 'line-through' : 'none',
+                textDecorationColor: 'var(--border)',
+                transition: 'color 0.15s ease',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {habit.name}
+            </span>
+
+            {isSkipped && (
+              <span
+                style={{
+                  fontSize: '0.62rem',
+                  fontFamily: 'var(--font-mono)',
+                  letterSpacing: '0.06em',
+                  color: 'var(--text-muted)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 3,
+                  padding: '1px 5px',
+                  backgroundColor: 'var(--surface-raised)',
+                  flexShrink: 0,
+                }}
+              >
+                [ Rest Day ]
+              </span>
+            )}
+            {/* Focus Timer Button */}
+            {onOpenTimer && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenTimer(habit)
+                }}
+                className="p-1.5 rounded-md text-[var(--text-muted)] hover:text-[var(--accent)] hover:bg-[var(--surface-raised)] transition-all flex-shrink-0"
+                title="Start Focus Timer for this habit"
+              >
+                <Clock size={13} />
+              </button>
+            )}
+
+            {/* Minimal 5-Day Pill Strip */}
+            {minimalMode && recentDays.length > 0 && (
+              <div
+                className="flex items-center gap-1.5 flex-shrink-0 ml-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {recentDays.map((d) => {
+                  const isDone = d.isToday ? isCompleted : dayCompletions[d.date] === true
+                  return (
+                    <button
+                      key={d.date}
+                      type="button"
+                      onClick={() => onToggleDay?.(d.date)}
+                      className={`w-6 sm:w-7 h-7 rounded-md flex items-center justify-center font-mono text-[9px] font-bold transition-all cursor-pointer ${
+                        isDone
+                          ? 'bg-[var(--accent)] text-white shadow-2xs'
+                          : 'bg-[var(--surface-raised)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--accent)]'
+                      } ${d.isToday ? 'ring-1.5 ring-[var(--accent)] ring-offset-1' : ''}`}
+                      title={`${d.dayLabel} (${d.date}): ${isDone ? 'Completed' : 'Incomplete'}`}
                     >
-                      <AnimatePresence>
-                        {done && (
-                          <motion.div
-                            initial={{ scale: 0 }}
-                            animate={{ scale: 1 }}
-                            exit={{ scale: 0 }}
-                            transition={{ type: 'spring', stiffness: 500, damping: 22 }}
-                          >
-                            <Check size={9} color="white" strokeWidth={2.5} />
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
-                    <span style={{
-                      fontSize: '0.8125rem',
-                      fontFamily: 'var(--font-mono)',
-                      color: done ? 'var(--ink-tertiary)' : 'var(--ink-secondary)',
-                      textDecoration: done ? 'line-through' : 'none',
-                      textDecorationColor: 'var(--ink-disabled)',
-                    }}>
-                      {subitem.name}
-                    </span>
-                  </div>
-                )
-              })}
+                      {isDone ? <Check size={10} strokeWidth={3} /> : d.dayNum}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Checklist Counter & Chevron */}
+          {isChecklist && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontFamily: 'var(--font-mono)',
+                  color: completedSubitems === habit.subitems.length ? 'var(--accent)' : 'var(--text-muted)',
+                  fontWeight: 600,
+                }}
+              >
+                {completedSubitems}/{habit.subitems.length}
+              </span>
+              <motion.div
+                animate={{ rotate: expanded ? 180 : 0 }}
+                transition={{ duration: 0.2 }}
+                style={{ color: 'var(--text-muted)', display: 'flex' }}
+              >
+                <ChevronDown size={14} />
+              </motion.div>
             </div>
-          </motion.div>
+          )}
+        </div>
+
+        {/* Checklist subitems */}
+        <AnimatePresence initial={false}>
+          {isChecklist && expanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div
+                style={{
+                  borderTop: '1px solid var(--border)',
+                  padding: '8px 16px 12px 50px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                {habit.subitems.map((sub) => {
+                  const done = subitemCompletions[sub.id] === true
+                  return (
+                    <div
+                      key={sub.id}
+                      onClick={() => onToggleSubitem(sub.id, allSubitemIds)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        cursor: 'pointer',
+                        userSelect: 'none',
+                      }}
+                    >
+                      <button
+                        className={`habit-checkbox ${done ? 'checked' : ''}`}
+                        aria-label={`Toggle ${sub.name}`}
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: 'var(--radius-xs)',
+                          border: `1.5px solid ${done ? 'var(--accent)' : 'var(--border)'}`,
+                          backgroundColor: done ? 'var(--accent)' : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          padding: 0,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {done && <Check size={10} color="#FFFFFF" strokeWidth={2.5} />}
+                      </button>
+                      <span
+                        style={{
+                          fontSize: '0.85rem',
+                          fontFamily: 'var(--font-mono)',
+                          color: done ? 'var(--text-muted)' : 'var(--text-primary)',
+                          textDecoration: done ? 'line-through' : 'none',
+                          textDecorationColor: 'var(--border)',
+                        }}
+                      >
+                        {sub.name}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Context Menu (Desktop Right-Click & Mobile Long-Press) */}
+      <AnimatePresence>
+        {showMenu && (
+          <>
+            {/* Backdrop */}
+            <div
+              className="fixed inset-0 z-30"
+              onClick={() => setShowMenu(false)}
+            />
+            {/* Menu Popover */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -4 }}
+              transition={{ duration: 0.15 }}
+              className="absolute left-6 top-10 z-40 bg-[var(--surface-raised)] border border-[var(--border)] rounded shadow-lg py-1 min-w-[170px] font-mono text-xs"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false)
+                  if (!isCompleted) handleToggle()
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-[var(--surface)] text-[var(--text-primary)] transition-colors flex items-center justify-between"
+              >
+                <span>Mark Complete</span>
+                {isCompleted && <Check size={12} className="text-[var(--accent)]" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMenu(false)
+                  if (onToggleSkip) onToggleSkip()
+                }}
+                className="w-full text-left px-3 py-1.5 hover:bg-[var(--surface)] text-[var(--text-primary)] transition-colors flex items-center justify-between"
+              >
+                <span>{isSkipped ? 'Unskip (Clear Rest)' : 'Skip Today (Rest Day)'}</span>
+                {isSkipped && <Minus size={12} className="text-[var(--text-muted)]" />}
+              </button>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
-    </motion.div>
+    </div>
   )
 }
