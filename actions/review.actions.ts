@@ -35,13 +35,22 @@ export async function upsertMonthReviewAction(input: z.infer<typeof upsertSchema
 
     const { startDate, endDate } = getMonthDateRange(r.data.year, r.data.month)
 
-    // Strictly scope daily_scores query to authenticated user
-    const { data: scores } = await db
+    // Strictly scope daily_scores query to authenticated user with legacy fallback
+    let { data: scores, error: scoresError } = await db
       .from('daily_scores')
       .select('completion_pct, sleep_hours')
       .eq('user_id', user.id)
       .gte('date', startDate)
       .lte('date', endDate)
+
+    if (scoresError && (scoresError.message?.toLowerCase().includes('user_id') || scoresError.code === '42703')) {
+      const fallback = await db
+        .from('daily_scores')
+        .select('completion_pct, sleep_hours')
+        .gte('date', startDate)
+        .lte('date', endDate)
+      scores = fallback.data
+    }
 
     const scoreRows = (scores ?? []) as unknown as Array<{ completion_pct: number; sleep_hours: number | null }>
 

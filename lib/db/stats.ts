@@ -5,6 +5,19 @@ import { CURATED_DISCIPLINE_QUOTES } from './quotes'
 import { toAppDateString, todayDate, getServerTimezone } from './entries'
 import { getMonthDateRange } from '@/lib/date'
 
+// Helper to detect if 'user_id' column is missing from views (e.g. legacy schema)
+function isUserIdError(err: { message?: string; code?: string } | null): boolean {
+  if (!err) return false
+  const msg = (err.message ?? '').toLowerCase()
+  return (
+    msg.includes('user_id') ||
+    msg.includes('does not exist') ||
+    msg.includes('schema cache') ||
+    err.code === '42703' ||
+    err.code === 'PGRST204'
+  )
+}
+
 export async function getDailyScores(limit?: number): Promise<DailyScore[]> {
   const db = await createServerClient()
   const { data: { user } } = await db.auth.getUser()
@@ -16,7 +29,20 @@ export async function getDailyScores(limit?: number): Promise<DailyScore[]> {
     .eq('user_id', user.id)
     .order('date', { ascending: false })
   if (limit) query = query.limit(limit)
-  const { data, error } = await query
+  let { data, error } = await query
+
+  // Resilient fallback if view does not expose user_id column yet
+  if (error && isUserIdError(error)) {
+    let fallbackQuery = db
+      .from('daily_scores')
+      .select('*')
+      .order('date', { ascending: false })
+    if (limit) fallbackQuery = fallbackQuery.limit(limit)
+    const fallback = await fallbackQuery
+    data = fallback.data
+    error = fallback.error
+  }
+
   if (error) throw new Error(`getDailyScores: ${error.message}`)
   return (data ?? []) as unknown as DailyScore[]
 }
@@ -26,12 +52,24 @@ export async function getDailyScoreForDate(date: string): Promise<DailyScore | n
   const { data: { user } } = await db.auth.getUser()
   if (!user) return null
 
-  const { data, error } = await db
+  let { data, error } = await db
     .from('daily_scores')
     .select('*')
     .eq('user_id', user.id)
     .eq('date', date)
     .maybeSingle()
+
+  // Resilient fallback if view does not expose user_id column yet
+  if (error && isUserIdError(error)) {
+    const fallback = await db
+      .from('daily_scores')
+      .select('*')
+      .eq('date', date)
+      .maybeSingle()
+    data = fallback.data
+    error = fallback.error
+  }
+
   if (error && error.code !== 'PGRST116') throw new Error(`getDailyScoreForDate: ${error.message}`)
   return (data as unknown as DailyScore) ?? null
 }
@@ -42,13 +80,26 @@ export async function getDailyScoresForMonth(year: number, month: number): Promi
   if (!user) return []
 
   const { startDate, endDate } = getMonthDateRange(year, month)
-  const { data, error } = await db
+  let { data, error } = await db
     .from('daily_scores')
     .select('*')
     .eq('user_id', user.id)
     .gte('date', startDate)
     .lte('date', endDate)
     .order('date', { ascending: true })
+
+  // Resilient fallback if view does not expose user_id column yet
+  if (error && isUserIdError(error)) {
+    const fallback = await db
+      .from('daily_scores')
+      .select('*')
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+    data = fallback.data
+    error = fallback.error
+  }
+
   if (error) throw new Error(`getDailyScoresForMonth: ${error.message}`)
   return (data ?? []) as unknown as DailyScore[]
 }
@@ -251,13 +302,26 @@ export async function getHabitMonthlyStats(year: number, month: number): Promise
   const { data: { user } } = await db.auth.getUser()
   if (!user) return []
 
-  const { data, error } = await db
+  let { data, error } = await db
     .from('habit_monthly_stats')
     .select('*')
     .eq('user_id', user.id)
     .eq('year', year)
     .eq('month', month)
     .order('consistency_pct', { ascending: false })
+
+  // Resilient fallback if view does not expose user_id column yet
+  if (error && isUserIdError(error)) {
+    const fallback = await db
+      .from('habit_monthly_stats')
+      .select('*')
+      .eq('year', year)
+      .eq('month', month)
+      .order('consistency_pct', { ascending: false })
+    data = fallback.data
+    error = fallback.error
+  }
+
   if (error) throw new Error(`getHabitMonthlyStats: ${error.message}`)
   return (data ?? []) as unknown as HabitMonthlyStat[]
 }

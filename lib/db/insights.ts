@@ -176,6 +176,59 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
       .eq('month', priorMonth),
   ])
 
+  function isUserIdError(err: { message?: string; code?: string } | null): boolean {
+    if (!err) return false
+    const msg = (err.message ?? '').toLowerCase()
+    return (
+      msg.includes('user_id') ||
+      msg.includes('does not exist') ||
+      msg.includes('schema cache') ||
+      err.code === '42703' ||
+      err.code === 'PGRST204'
+    )
+  }
+
+  // Graceful fallbacks if views in remote database do not have user_id column yet
+  let dailyScoresData = dailyScoresRes.data
+  if (!dailyScoresData && dailyScoresRes.error && isUserIdError(dailyScoresRes.error)) {
+    const fallback = await db
+      .from('daily_scores')
+      .select('*')
+      .gte('date', startDate)
+      .lte('date', endDate)
+      .order('date', { ascending: true })
+    dailyScoresData = fallback.data
+  }
+
+  let allScoresData = allScoresRes.data
+  if (!allScoresData && allScoresRes.error && isUserIdError(allScoresRes.error)) {
+    const fallback = await db
+      .from('daily_scores')
+      .select('date, completion_pct, total_active_habits, completed_habits, skipped_habits')
+      .order('date', { ascending: false })
+    allScoresData = fallback.data
+  }
+
+  let thisMonthStatsData = thisMonthStatsRes.data
+  if (!thisMonthStatsData && thisMonthStatsRes.error && isUserIdError(thisMonthStatsRes.error)) {
+    const fallback = await db
+      .from('habit_monthly_stats')
+      .select('*')
+      .eq('year', year)
+      .eq('month', month)
+    thisMonthStatsData = fallback.data
+  }
+
+  let priorMonthStatsData = priorMonthStatsRes.data
+  if (!priorMonthStatsData && priorMonthStatsRes.error && isUserIdError(priorMonthStatsRes.error)) {
+    const fallback = await db
+      .from('habit_monthly_stats')
+      .select('*')
+      .eq('year', priorYear)
+      .eq('month', priorMonth)
+    priorMonthStatsData = fallback.data
+  }
+
   const habits = (habitsRes.data ?? []) as Habit[]
   const monthEntries = (monthEntriesRes.data ?? []) as Array<{
     id: string
@@ -183,7 +236,7 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
     sleep_hours: number | null
     day_habit_completions: Array<{ habit_id: string; is_completed: boolean; is_skipped?: boolean }>
   }>
-  const dailyScores = (dailyScoresRes.data ?? []) as Array<{
+  const dailyScores = (dailyScoresData ?? []) as Array<{
     day_entry_id: string
     date: string
     total_active_habits: number
@@ -192,21 +245,21 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
     completion_pct: number
     sleep_hours: number | null
   }>
-  const allScores = (allScoresRes.data ?? []) as Array<{
+  const allScores = (allScoresData ?? []) as Array<{
     date: string
     completion_pct: number
     total_active_habits?: number
     completed_habits?: number
     skipped_habits?: number
   }>
-  const thisMonthStats = (thisMonthStatsRes.data ?? []) as Array<{
+  const thisMonthStats = (thisMonthStatsData ?? []) as Array<{
     habit_id: string
     habit_name: string
     days_active: number
     days_completed: number
     consistency_pct: number
   }>
-  const priorMonthStats = (priorMonthStatsRes.data ?? []) as Array<{
+  const priorMonthStats = (priorMonthStatsData ?? []) as Array<{
     habit_id: string
     consistency_pct: number
   }>
