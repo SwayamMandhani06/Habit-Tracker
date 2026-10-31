@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X, Clock, Check } from 'lucide-react'
 import type { HabitWithSubitems } from '@/lib/supabase/types'
 import { SignalBarSelector } from '@/components/today/SignalBarSelector'
 import { HabitRow } from '@/components/today/HabitRow'
@@ -30,6 +30,7 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
   const [weight, setWeight] = useState('')
   const [screenTime, setScreenTime] = useState('')
   const [notes, setNotes] = useState('')
+  const [noteTag, setNoteTag] = useState<'Note' | 'Planned' | 'Completed'>('Note')
   const [entryId, setEntryId] = useState<string | null>(null)
 
   const modalRef = useRef<HTMLDivElement>(null)
@@ -145,7 +146,11 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
           setSleep(e.sleep_hours?.toString() ?? '')
           setWeight(e.weight_kg?.toString() ?? '')
           setScreenTime(e.screen_time_minutes?.toString() ?? '')
-          setNotes(e.notes ?? '')
+          const rawNote = e.notes ?? ''
+          setNotes(rawNote)
+          if (rawNote.startsWith('[Planned]')) setNoteTag('Planned')
+          else if (rawNote.startsWith('[Completed]')) setNoteTag('Completed')
+          else setNoteTag('Note')
         }
         if (data.completions) {
           setHabitComps(data.completions.habitCompletions ?? {})
@@ -373,12 +378,59 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
               </div>
             </div>
 
-            {/* Reflections / Notes */}
-            <div className="card card-sm" style={{ marginBottom: '10px' }}>
-              <p style={{ fontSize: '0.75rem', color: 'var(--ink-tertiary)', marginBottom: '8px' }}>Notes</p>
+            {/* A Day Note — Streak Inspired Reflection Card */}
+            <div className="card card-sm" style={{ marginBottom: '14px', padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-primary)' }}>
+                    A Day Note
+                  </span>
+                  {/* Type Chips */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    {(['Note', 'Planned', 'Completed'] as const).map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          setNoteTag(tag)
+                          const clean = notes.replace(/^\[(Note|Planned|Completed)\]\s*/, '')
+                          const updated = `[${tag}] ${clean}`
+                          setNotes(updated)
+                          scheduleSave({ notes: updated })
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: 99,
+                          fontSize: '0.65rem',
+                          fontFamily: 'var(--font-mono)',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          backgroundColor: noteTag === tag ? 'var(--accent)' : 'var(--surface-raised)',
+                          color: noteTag === tag ? '#FFFFFF' : 'var(--text-muted)',
+                          border: `1px solid ${noteTag === tag ? 'var(--accent)' : 'var(--border)'}`,
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <span style={{ width: 4, height: 4, borderRadius: '50%', backgroundColor: 'currentColor' }} />
+                        <span>{tag}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontFamily: 'var(--font-mono)', fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
+                  <Clock size={11} style={{ color: 'var(--accent)' }} />
+                  <span>Target: 21:30</span>
+                </div>
+              </div>
+
               <textarea
                 className="input textarea"
                 value={notes}
+                maxLength={500}
                 rows={3}
                 aria-label="Notes reflections for this day"
                 onChange={e => {
@@ -386,8 +438,23 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
                   scheduleSave({ notes: e.target.value })
                 }}
                 onBlur={flushSave}
-                placeholder="Reflections for this day..."
+                placeholder="Ten pages tonight, slower than usual but I kept going. How did today go?..."
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.8125rem',
+                  lineHeight: 1.5,
+                  borderRadius: 'var(--radius-sm)',
+                }}
               />
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                <span>Reflect calmly &middot; auto-saved</span>
+                <span style={{ color: notes.length > 450 ? 'var(--accent)' : undefined }}>
+                  {notes.length} / 500 chars
+                </span>
+              </div>
             </div>
           </>
         )}
