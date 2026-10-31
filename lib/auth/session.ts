@@ -2,12 +2,13 @@
 // Supabase Auth session helpers
 // All session state managed by Supabase Auth via @supabase/ssr
 
+import { cache } from 'react'
 import { createServerClient } from '@/lib/supabase/server'
 import type { User } from '@supabase/supabase-js'
 
 // Returns the authenticated Supabase user, or null if not authenticated.
-// Use this in Server Actions and Server Components to check auth.
-export async function getSessionUser(): Promise<User | null> {
+// Memoized with React cache() to eliminate duplicate auth roundtrips in a single request.
+export const getSessionUser = cache(async (): Promise<User | null> => {
   try {
     const supabase = await createServerClient()
     const { data: { user }, error } = await supabase.auth.getUser()
@@ -16,20 +17,19 @@ export async function getSessionUser(): Promise<User | null> {
   } catch {
     return null
   }
-}
+})
 
 // Single-step helper that returns both the authenticated user and server client.
-// Eliminates redundant client-creation / double auth calls across Server Actions.
-export async function getSessionContext(): Promise<{ user: User; supabase: Awaited<ReturnType<typeof createServerClient>> } | null> {
+export const getSessionContext = cache(async (): Promise<{ user: User; supabase: Awaited<ReturnType<typeof createServerClient>> } | null> => {
   try {
     const supabase = await createServerClient()
-    const { data: { user }, error } = await supabase.auth.getUser()
-    if (error || !user) return null
+    const user = await getSessionUser()
+    if (!user) return null
     return { user, supabase }
   } catch {
     return null
   }
-}
+})
 
 // Convenience: returns true if there is an authenticated session.
 // Drop-in replacement for the old verifySession() used in all server actions.
