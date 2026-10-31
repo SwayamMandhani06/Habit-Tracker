@@ -21,7 +21,7 @@
   --accent: #5C6B5A;
   --accent-light: #8BA888;
   --border: rgba(0, 0, 0, 0.08);
-  --dot-color: rgba(0, 0, 0, 0.12);
+  --dot-color: rgba(35, 30, 25, 0.24);
   --color-danger: #8B4141;
 
   /* Semantic Aliases for compatibility */
@@ -74,7 +74,7 @@
   --accent: #7AA080;
   --accent-light: #8BA888;
   --border: rgba(255, 255, 255, 0.08);
-  --dot-color: rgba(255, 255, 255, 0.08);
+  --dot-color: rgba(255, 255, 255, 0.16);
   --color-danger: #E06C6C;
 
   --bg-base: var(--bg);
@@ -127,9 +127,16 @@
 
     /* Dotted notebook paper texture */
     background-image: radial-gradient(circle,
-        var(--dot-color) 1px,
-        transparent 1px);
+        var(--dot-color) 1.2px,
+        transparent 1.2px);
     background-size: 20px 20px;
+  }
+
+  [data-theme="dark"] body {
+    background-image:
+      radial-gradient(circle, var(--dot-color) 1.2px, transparent 1.2px),
+      radial-gradient(ellipse 70% 40% at 50% 15%, rgba(122, 160, 128, 0.09), transparent 70%);
+    background-size: 20px 20px, 100% 100%;
   }
 }
 

@@ -35,14 +35,13 @@ export function Sidebar() {
 
   return (
     <aside
-      className="app-sidebar"
+      className="app-sidebar hidden lg:flex"
       style={{
         width: 220,
         height: '100dvh',
         position: 'sticky',
         top: 0,
         flexShrink: 0,
-        display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
         borderRight: '1px solid var(--border)',
@@ -103,6 +102,7 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={true}
                 style={{
                   display: 'flex',
                   alignItems: 'center',

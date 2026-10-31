@@ -37,6 +37,7 @@ export function BottomTabBar() {
           <Link
             key={item.href}
             href={item.href}
+            prefetch={true}
             aria-label={item.label}
             aria-current={active ? 'page' : undefined}
             style={{
