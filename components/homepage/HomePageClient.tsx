@@ -233,11 +233,19 @@ export function HomePageClient() {
           borderColor: 'var(--border)',
         }}
       >
-        {/* Subtle dotted noise texture */}
+        {/* Subtle luminous ambient gradient in dark theme */}
         <div
-          className="absolute inset-0 pointer-events-none opacity-[0.4]"
+          className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] max-w-full h-[450px] pointer-events-none rounded-full blur-[110px] opacity-15 dark:opacity-30"
           style={{
-            backgroundImage: 'radial-gradient(circle, var(--dot-color) 1px, transparent 1px)',
+            background: 'radial-gradient(circle, var(--accent) 0%, rgba(122,160,128,0.2) 45%, transparent 75%)',
+          }}
+        />
+
+        {/* Crisp dotted notebook paper texture */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-80 dark:opacity-90"
+          style={{
+            backgroundImage: 'radial-gradient(circle, var(--dot-color) 1.2px, transparent 1.2px)',
             backgroundSize: '24px 24px',
           }}
         />
@@ -340,7 +348,7 @@ export function HomePageClient() {
                 </a>
               </motion.div>
 
-              {/* Trust Badges — Productive App Style */}
+              {/* Core SaaS Architecture Pillars */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -348,31 +356,31 @@ export function HomePageClient() {
                 className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-7 border-t border-[var(--border)] font-mono text-xs text-[var(--text-muted)]"
               >
                 <div className="flex items-center gap-2.5">
-                  <Award size={18} className="text-[var(--accent)] flex-shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-[var(--accent)] flex-shrink-0" />
                   <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Webby</span>
-                    <span className="text-[10px]">Honoree Design</span>
+                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Zero Distraction</span>
+                    <span className="text-[10px]">No feed or noise</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <Crown size={18} className="text-amber-500 flex-shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
                   <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Product</span>
-                    <span className="text-[10px]">Of The Day</span>
+                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Offline PWA</span>
+                    <span className="text-[10px]">Installable app</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <Star size={18} className="text-amber-500 fill-amber-500 flex-shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                   <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">4.9 / 5.0</span>
-                    <span className="text-[10px]">User Rating</span>
+                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Strict Timezone</span>
+                    <span className="text-[10px]">Accurate day reset</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
-                  <ShieldCheck size={18} className="text-emerald-500 flex-shrink-0" />
+                  <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />
                   <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">100% Private</span>
-                    <span className="text-[10px]">Tenant Isolated</span>
+                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Open Schema</span>
+                    <span className="text-[10px]">Postgres export</span>
                   </div>
                 </div>
               </motion.div>
