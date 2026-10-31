@@ -29,6 +29,12 @@ export default function LoginPage() {
     async function initAuth() {
       if (typeof window !== 'undefined') {
         const params = new URLSearchParams(window.location.search)
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+        const errorDesc = params.get('error_description') || hashParams.get('error_description') || params.get('error')
+        if (errorDesc) {
+          setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '))
+        }
+
         if (params.get('mode') === 'signup') {
           setMode('signup')
         }
@@ -118,7 +124,7 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true)
     setError(null)
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    const siteUrl = typeof window !== 'undefined' ? window.location.origin : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000')
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {

@@ -119,7 +119,7 @@ export async function createHabit(
   const maxRow = maxData as { sort_order: number } | null
   const nextOrder = (maxRow?.sort_order ?? 0) + 1
 
-  const insertPayload: Record<string, any> = {
+  const basePayload: Record<string, any> = {
     name: trimmedName,
     type,
     sort_order: nextOrder,
@@ -127,25 +127,40 @@ export async function createHabit(
     user_id: user.id, // Explicit user_id
   }
 
-  // Only include notes column if non-empty notes were provided
+  // 1. Try inserting with notes if notes were provided
   if (notes && notes.trim()) {
-    insertPayload.notes = notes.trim()
+    const { data, error } = await supabase
+      .from('habits')
+      .insert({ ...basePayload, notes: notes.trim() } as any)
+      .select()
+      .single()
+
+    if (!error && data) {
+      return data as Habit
+    }
+
+    if (error && !isNotesOrSchemaError(error)) {
+      throw new Error(`createHabit: ${error.message}`)
+    }
+    // If it was a notes/schema cache error, fall through to insert without notes
   }
 
+  // 2. Insert base habit without notes (guaranteed safe on all schema versions)
   let { data, error } = await supabase
     .from('habits')
-    .insert(insertPayload as any)
+    .insert(basePayload as any)
     .select()
     .single()
 
+  // 3. Fallback to selecting explicit standard columns if select() encountered cache issues
   if (error && isNotesOrSchemaError(error)) {
-    delete insertPayload.notes
     const fallback = await supabase
       .from('habits')
-      .insert(insertPayload as any)
-      .select()
+      .insert(basePayload as any)
+      .select('id, name, type, sort_order, is_archived, user_id, created_at, updated_at')
       .single()
-    data = fallback.data
+
+    data = fallback.data as any
     error = fallback.error
   }
 
