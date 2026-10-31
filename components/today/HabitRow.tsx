@@ -2,7 +2,7 @@
 // components/today/HabitRow.tsx — Habit row with spring checkbox pop, long-press/right-click skip menu
 import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, Check, Minus, Clock } from 'lucide-react'
+import { ChevronDown, Check, Minus, Plus, Clock } from 'lucide-react'
 import type { HabitWithSubitems } from '@/lib/supabase/types'
 
 interface Props {
@@ -131,7 +131,7 @@ export function HabitRow({
               className={`habit-checkbox ${isCompleted ? 'checked' : ''}`}
               animate={
                 justChecked
-                  ? { scale: [0.85, 1.1, 1], transition: { duration: 0.3, type: 'spring', stiffness: 450, damping: 18 } }
+                  ? { scale: [0.85, 1.1, 1], transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] } }
                   : { scale: 1 }
               }
               aria-label={`Toggle ${habit.name}`}
@@ -191,7 +191,7 @@ export function HabitRow({
                 fontWeight: 500,
                 letterSpacing: '0.01em',
                 color: isCompleted || isSkipped ? 'var(--text-muted)' : 'var(--text-primary)',
-                textDecoration: isCompleted ? 'line-through' : isSkipped ? 'line-through' : 'none',
+                textDecorationLine: isCompleted || isSkipped ? 'line-through' : 'none',
                 textDecorationColor: 'var(--border)',
                 transition: 'color 0.15s ease',
                 overflow: 'hidden',
@@ -262,19 +262,57 @@ export function HabitRow({
             )}
           </div>
 
-          {/* Checklist Counter & Chevron */}
+          {/* Checklist Counter, Steppers & Chevron */}
           {isChecklist && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontFamily: 'var(--font-mono)',
-                  color: completedSubitems === habit.subitems.length ? 'var(--accent)' : 'var(--text-muted)',
-                  fontWeight: 600,
-                }}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+              {/* Stepper buttons like Streak amount habits */}
+              <div
+                className="flex items-center gap-1 bg-[var(--surface-raised)] border border-[var(--border)] rounded-full px-1.5 py-0.5"
+                onClick={(e) => e.stopPropagation()}
               >
-                {completedSubitems}/{habit.subitems.length}
-              </span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const allSubIds = habit.subitems.map((s) => s.id)
+                    const lastCompleted = [...habit.subitems].reverse().find((s) => subitemCompletions[s.id])
+                    if (lastCompleted) onToggleSubitem(lastCompleted.id, allSubIds)
+                  }}
+                  disabled={completedSubitems === 0}
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  title="Step down"
+                >
+                  <Minus size={10} />
+                </button>
+
+                <span
+                  style={{
+                    fontSize: '0.72rem',
+                    fontFamily: 'var(--font-mono)',
+                    color: completedSubitems === habit.subitems.length ? 'var(--accent)' : 'var(--text-muted)',
+                    fontWeight: 600,
+                    padding: '0 2px',
+                  }}
+                >
+                  {completedSubitems}/{habit.subitems.length}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const allSubIds = habit.subitems.map((s) => s.id)
+                    const nextIncomplete = habit.subitems.find((s) => !subitemCompletions[s.id])
+                    if (nextIncomplete) onToggleSubitem(nextIncomplete.id, allSubIds)
+                  }}
+                  disabled={completedSubitems === habit.subitems.length}
+                  className="w-4 h-4 rounded-full flex items-center justify-center text-[var(--accent)] hover:opacity-80 disabled:opacity-30 disabled:cursor-not-allowed transition-all font-bold"
+                  title="Step up"
+                >
+                  <Plus size={10} strokeWidth={2.5} />
+                </button>
+              </div>
+
               <motion.div
                 animate={{ rotate: expanded ? 180 : 0 }}
                 transition={{ duration: 0.2 }}
@@ -343,7 +381,7 @@ export function HabitRow({
                           fontSize: '0.85rem',
                           fontFamily: 'var(--font-mono)',
                           color: done ? 'var(--text-muted)' : 'var(--text-primary)',
-                          textDecoration: done ? 'line-through' : 'none',
+                          textDecorationLine: done ? 'line-through' : 'none',
                           textDecorationColor: 'var(--border)',
                         }}
                       >

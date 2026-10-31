@@ -12,7 +12,7 @@ import { WeeklyIntention } from './WeeklyIntention'
 import { FocusTimerModal } from './FocusTimerModal'
 import { playCompletionChime } from '@/lib/audio'
 import Link from 'next/link'
-import { ArrowRight, Clock, SlidersHorizontal, Grid } from 'lucide-react'
+import { ArrowRight, Clock, SlidersHorizontal, Grid, Check } from 'lucide-react'
 
 interface Props {
   date: string
@@ -67,6 +67,13 @@ export function TodayClient({
   const [weight, setWeight] = useState<string>(entry.weight_kg?.toString() ?? '')
   const [screenTime, setScreenTime] = useState<string>(entry.screen_time_minutes?.toString() ?? '')
   const [notes, setNotes] = useState<string>(entry.notes ?? '')
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'focus' | 'body' | 'mind' | 'routine'>('all')
+  const [noteTag, setNoteTag] = useState<'Note' | 'Planned' | 'Completed'>(() => {
+    const raw = entry.notes ?? ''
+    if (raw.startsWith('[Planned]')) return 'Planned'
+    if (raw.startsWith('[Completed]')) return 'Completed'
+    return 'Note'
+  })
   const [showCelebration, setShowCelebration] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -97,6 +104,20 @@ export function TodayClient({
   // If all habits are skipped or user has 0 habits, completion is 0% and does not falsely trigger celebration
   const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
   const isPerfect = totalCount > 0 && completedCount > 0 && pct >= 100
+
+  // Category classification helper for Streak-style category filter pills
+  const getHabitCategory = useCallback((h: HabitWithSubitems): 'focus' | 'body' | 'mind' | 'routine' => {
+    const text = `${h.name} ${h.notes ?? ''}`.toLowerCase()
+    if (text.match(/work|code|study|read|focus|learn|write|sprint|project|tasks?|deep|book|course/)) return 'focus'
+    if (text.match(/gym|exercise|workout|run|walk|steps?|water|sleep|stretch|diet|eat|food|train|fitness/)) return 'body'
+    if (text.match(/meditat|reflect|journal|calm|mind|breathe|gratitude|pray|peace|silence/)) return 'mind'
+    return 'routine'
+  }, [])
+
+  const filteredHabits = habits.filter((h) => {
+    if (selectedCategory === 'all') return true
+    return getHabitCategory(h) === selectedCategory
+  })
 
   // Debounced auto-save
   const debouncedMood = useDebounce(mood, 500)
@@ -530,7 +551,7 @@ export function TodayClient({
       </motion.div>
 
       {/* ── HABITS LIST & VIEW SWITCHER ───────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <span className="section-label">DAILY DISCIPLINES</span>
 
         {/* View Switcher: Classic vs. 5-Day Strip */}
@@ -560,6 +581,41 @@ export function TodayClient({
             <span>5-Day Strip</span>
           </button>
         </div>
+      </div>
+
+      {/* Streak-Style Category Filter Pills */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-3.5 no-scrollbar select-none">
+        {[
+          { key: 'all', label: 'All', count: habits.length },
+          { key: 'focus', label: 'Focus', count: habits.filter((h) => getHabitCategory(h) === 'focus').length },
+          { key: 'body', label: 'Body', count: habits.filter((h) => getHabitCategory(h) === 'body').length },
+          { key: 'mind', label: 'Mind', count: habits.filter((h) => getHabitCategory(h) === 'mind').length },
+          { key: 'routine', label: 'Routine', count: habits.filter((h) => getHabitCategory(h) === 'routine').length },
+        ].map((cat) => (
+          <button
+            key={cat.key}
+            type="button"
+            onClick={() => setSelectedCategory(cat.key as any)}
+            className={`px-3 py-1 rounded-full font-mono text-xs font-semibold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+              selectedCategory === cat.key
+                ? 'bg-[var(--accent)] text-white shadow-xs'
+                : 'bg-[var(--surface-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+            }`}
+          >
+            <span>{cat.label}</span>
+            {cat.count > 0 && (
+              <span
+                className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                  selectedCategory === cat.key
+                    ? 'bg-black/25 text-white'
+                    : 'bg-[var(--surface)] text-[var(--text-muted)]'
+                }`}
+              >
+                {cat.count}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
       {/* Minimal Mode Column Headers (Weekdays) */}
@@ -609,8 +665,22 @@ export function TodayClient({
               + Add Your First Habit
             </Link>
           </div>
+        ) : filteredHabits.length === 0 ? (
+          <div
+            style={{
+              padding: '28px 20px',
+              textAlign: 'center',
+              border: '1px dashed var(--border)',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'var(--surface)',
+            }}
+          >
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
+              No habits under &ldquo;{selectedCategory}&rdquo; category.
+            </p>
+          </div>
         ) : (
-          habits.map((habit, i) => {
+          filteredHabits.map((habit, i) => {
             // Build 5-day completions lookup map for this habit
             const dayCompletionsMap: Record<string, boolean> = {}
             for (const d of recentDays) {
@@ -786,26 +856,70 @@ export function TodayClient({
           </div>
         </div>
 
-        {/* Daily reflection notes */}
+        {/* A Day Note — Streak Inspired Reflection Card */}
         <div
           style={{
-            padding: '16px 18px',
+            padding: '20px 22px',
             backgroundColor: 'var(--surface)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-lg)',
           }}
         >
-          <p className="section-label" style={{ marginBottom: 8 }}>
-            Daily Reflections
-          </p>
+          {/* Header Row: Title + Type Chips + Target Time & Save Indicator */}
+          <div className="flex items-center justify-between flex-wrap gap-2.5 mb-3.5">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="font-mono text-xs font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                A Day Note
+              </span>
+
+              {/* Type Chips (Note, Planned, Completed) */}
+              <div className="flex items-center gap-1 font-mono text-[11px]">
+                {(['Note', 'Planned', 'Completed'] as const).map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => {
+                      setNoteTag(tag)
+                      const clean = notes.replace(/^\[(Note|Planned|Completed)\]\s*/, '')
+                      setNotes(`[${tag}] ${clean}`)
+                    }}
+                    className={`px-2.5 py-0.5 rounded-full border transition-all text-[10px] font-semibold flex items-center gap-1.5 ${
+                      noteTag === tag
+                        ? 'bg-[var(--accent)] text-white border-[var(--accent)] shadow-xs'
+                        : 'bg-[var(--surface-raised)] text-[var(--text-muted)] border-[var(--border)] hover:text-[var(--text-primary)]'
+                    }`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    <span>{tag}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Target Time & Save Status */}
+            <div className="flex items-center gap-3 font-mono text-[11px] text-[var(--text-muted)]">
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded bg-[var(--surface-raised)] border border-[var(--border)]">
+                <Clock size={11} className="text-[var(--accent)]" />
+                <span>Target: 21:30</span>
+              </span>
+              {showSaved && (
+                <span className="text-emerald-500 font-semibold flex items-center gap-1">
+                  <Check size={12} />
+                  <span>Saved</span>
+                </span>
+              )}
+            </div>
+          </div>
+
           <textarea
             value={notes}
+            maxLength={500}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="How did today go? Context, thoughts, or wins..."
+            placeholder="Ten pages tonight, slower than usual but I kept going. How did today go? Context, thoughts, or wins..."
             rows={3}
             style={{
               width: '100%',
-              padding: '10px 12px',
+              padding: '12px 14px',
               fontFamily: 'var(--font-mono)',
               fontSize: '0.875rem',
               backgroundColor: 'var(--bg)',
@@ -817,6 +931,14 @@ export function TodayClient({
               outline: 'none',
             }}
           />
+
+          {/* Footer Row: Live Character Counter */}
+          <div className="flex items-center justify-between pt-2.5 font-mono text-[10px] text-[var(--text-muted)]">
+            <span>Reflect calmly &middot; auto-saved securely</span>
+            <span className={notes.length > 450 ? 'text-amber-500 font-bold' : ''}>
+              {notes.length} / 500 chars
+            </span>
+          </div>
         </div>
       </div>
 
