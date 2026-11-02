@@ -1,6 +1,7 @@
 'use client'
 
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence, PanInfo } from 'framer-motion'
 import { X } from 'lucide-react'
 
@@ -23,6 +24,18 @@ export function ResponsiveSheet({
   maxHeight = '90dvh',
   className = '',
 }: Props) {
+  const [mounted, setMounted] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+    const mq = window.matchMedia('(max-width: 767px)')
+    setIsMobile(mq.matches)
+    const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [])
+
   // Listen for Escape key
   useEffect(() => {
     if (!isOpen) return
@@ -51,37 +64,42 @@ export function ResponsiveSheet({
     }
   }
 
-  return (
+  if (!mounted) return null
+
+  const content = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end md:justify-center md:items-center">
+        <div
+          className="fixed inset-0 z-[100] flex flex-col justify-end md:justify-center md:items-center p-0 md:p-6"
+          style={{ isolation: 'isolate' }}
+        >
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.18 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs cursor-pointer"
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs cursor-pointer z-0"
             aria-hidden="true"
           />
 
           {/* Sheet / Dialog Container */}
           <motion.div
-            initial={{ y: '100%', opacity: 0.8 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: '100%', opacity: 0 }}
+            initial={isMobile ? { y: '100%', opacity: 0.8 } : { opacity: 0, scale: 0.96, y: 10 }}
+            animate={isMobile ? { y: 0, opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+            exit={isMobile ? { y: '100%', opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-            drag="y"
+            drag={isMobile ? 'y' : false}
             dragConstraints={{ top: 0 }}
             dragElastic={0.15}
             onDragEnd={handleDragEnd}
             role="dialog"
             aria-modal="true"
             aria-labelledby={title ? 'sheet-title' : undefined}
-            className={`relative z-10 w-full md:max-w-lg md:rounded-3xl rounded-t-[28px] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] shadow-2xl flex flex-col overflow-hidden ${className}`}
+            className={`relative z-10 w-full md:max-w-xl md:rounded-3xl rounded-t-[28px] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] shadow-2xl flex flex-col overflow-hidden ${className}`}
             style={{
-              maxHeight: 'min(90dvh, 760px)',
+              maxHeight: 'min(90dvh, 780px)',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
             }}
           >
@@ -92,7 +110,7 @@ export function ResponsiveSheet({
 
             {/* Header */}
             {(title || description) && (
-              <div className="px-5 pt-3 pb-3 border-b border-[var(--border)] flex items-start justify-between gap-3">
+              <div className="px-6 pt-4 pb-3 border-b border-[var(--border)] flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   {title && (
                     <h3
@@ -121,7 +139,7 @@ export function ResponsiveSheet({
             )}
 
             {/* Body Content */}
-            <div className="flex-1 overflow-y-auto p-5 no-scrollbar">
+            <div className="flex-1 overflow-y-auto p-6 no-scrollbar">
               {children}
             </div>
           </motion.div>
@@ -129,4 +147,6 @@ export function ResponsiveSheet({
       )}
     </AnimatePresence>
   )
+
+  return createPortal(content, document.body)
 }
