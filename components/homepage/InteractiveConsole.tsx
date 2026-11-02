@@ -1,5 +1,5 @@
 'use client'
 
 // components/homepage/InteractiveConsole.tsx
-// Re-exports the 3D Tilted iPhone Hero Mockup with interactive Today live experience
-export { HeroPhoneMockup as InteractiveConsole } from './HeroPhoneMockup'
+// Layered 3D Pop-out Scene with preserve-3d and interactive habit cards
+export { Hero3DScene as InteractiveConsole } from './Hero3DScene'

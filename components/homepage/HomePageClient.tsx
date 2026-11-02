@@ -27,13 +27,22 @@ import { StreakShowcase } from '@/components/homepage/StreakShowcase'
 import { createClient } from '@/lib/supabase/client'
 
 // ── Wrapper that enforces page max-width + horizontal padding ────────────────
-function Container({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function Container({
+  children,
+  className = '',
+  style = {},
+}: {
+  children: React.ReactNode
+  className?: string
+  style?: React.CSSProperties
+}) {
   return (
     <div
       className={`w-full max-w-[1180px] mx-auto ${className}`}
       style={{
         paddingLeft: 'clamp(20px, 5vw, 80px)',
         paddingRight: 'clamp(20px, 5vw, 80px)',
+        ...style,
       }}
     >
       {children}
@@ -222,12 +231,12 @@ export function HomePageClient() {
 
       {/* ════════════════════════════════════════════════════════════════════════
           SECTION 1 — HERO
-          Two-column: editorial headline left / interactive console right.
-          Console is capped at 480px and stays fully in its column.
+          Two-column: editorial headline left / layered 3D pop-out scene right.
       ═══════════════════════════════════════════════════════════════════════════ */}
       <section
-        className="relative flex items-center border-b"
+        className="hero relative flex items-center border-b"
         style={{
+          overflowX: 'clip',
           paddingTop: 'clamp(110px, 14vw, 160px)',
           paddingBottom: 'clamp(80px, 10vw, 120px)',
           borderColor: 'var(--border)',
@@ -250,7 +259,7 @@ export function HomePageClient() {
           }}
         />
 
-        <Container className="relative z-10">
+        <Container className="relative z-10" style={{ transformStyle: 'preserve-3d' }}>
           {/* Eyebrow Badge */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -271,8 +280,11 @@ export function HomePageClient() {
             </span>
           </motion.div>
 
-          {/* Hero grid: Left Editorial / Right 3D Tilted iPhone Frame */}
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] xl:grid-cols-[1fr_420px] gap-10 lg:gap-14 xl:gap-20 items-center">
+          {/* Hero grid: Left Editorial / Right Layered 3D Pop-out Scene */}
+          <div
+            className="grid grid-cols-1 lg:grid-cols-[1.1fr_390px] xl:grid-cols-[1.2fr_420px] gap-10 lg:gap-14 xl:gap-16 items-center"
+            style={{ transformStyle: 'preserve-3d' }}
+          >
             {/* ── Left: Editorial Headline ── */}
             <div className="flex flex-col justify-center">
               {/* Headline */}
@@ -283,23 +295,14 @@ export function HomePageClient() {
                 className="font-mono font-extrabold leading-[1.08] mb-6 text-[var(--text-primary)]"
                 style={{ fontSize: 'clamp(2.4rem, 4.2vw, 4.2rem)', letterSpacing: '-0.035em' }}
               >
-                Make 2026 your most{' '}
-                <span
-                  className="font-serif italic font-normal text-[1.06em]"
+                Get{' '}
+                <em
+                  className="font-serif italic font-normal text-[1.08em]"
                   style={{ color: 'var(--accent)' }}
                 >
-                  disciplined year
-                </span>{' '}
-                ever.
-                <span
-                  className="block font-serif italic font-normal underline underline-offset-8 mt-3 text-[0.92em] leading-[1.14]"
-                  style={{
-                    color: 'var(--accent)',
-                    textDecorationColor: 'var(--border)',
-                  }}
-                >
-                  1% Better every single day.
-                </span>
+                  1% better
+                </em>{' '}
+                every single day.
               </motion.h1>
 
               {/* Sub-headline */}
@@ -310,7 +313,7 @@ export function HomePageClient() {
                 className="font-serif italic leading-relaxed mb-9 text-[var(--text-muted)]"
                 style={{ fontSize: 'clamp(1.05rem, 1.8vw, 1.25rem)', maxWidth: '42ch' }}
               >
-                A calm, focused personal discipline system. Completely private, custom to your routines, and built for people who take their personal mastery seriously.
+                A calm, focused habit system for people who take their discipline seriously.
               </motion.p>
 
               {/* CTA row */}
@@ -348,53 +351,44 @@ export function HomePageClient() {
                 </a>
               </motion.div>
 
-              {/* Core SaaS Architecture Pillars */}
+              {/* Verified Facts Trust Row */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.55, delay: 0.55 }}
-                className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-7 border-t border-[var(--border)] font-mono text-xs text-[var(--text-muted)]"
+                className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-7 border-t border-[var(--border)] font-mono text-xs text-[var(--text-muted)]"
               >
                 <div className="flex items-center gap-2.5">
                   <span className="w-2 h-2 rounded-full bg-[var(--accent)] flex-shrink-0" />
                   <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Zero Distraction</span>
-                    <span className="text-[10px]">No feed or noise</span>
+                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Free To Start</span>
+                    <span className="text-[10px]">Zero billing or paywall code</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
                   <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Offline PWA</span>
-                    <span className="text-[10px]">Installable app</span>
+                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Private To Your Account</span>
+                    <span className="text-[10px]">RLS enabled on every table</span>
                   </div>
                 </div>
                 <div className="flex items-center gap-2.5">
                   <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                   <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Strict Timezone</span>
-                    <span className="text-[10px]">Accurate day reset</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" />
-                  <div>
-                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Open Schema</span>
-                    <span className="text-[10px]">Postgres export</span>
+                    <span className="block font-bold text-[var(--text-primary)] text-[11px]">Works On Phone And Laptop</span>
+                    <span className="text-[10px]">Responsive layout & PWA</span>
                   </div>
                 </div>
               </motion.div>
             </div>
 
-            {/* ── Right: 3D Tilted iPhone Mockup ── */}
-            <motion.div
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="w-full flex items-center justify-center lg:justify-end"
+            {/* ── Right: Layered 3D Pop-out Scene (Zero flattening wrappers) ── */}
+            <div
+              className="w-full flex items-center justify-center lg:justify-end lg:-mr-10 select-none"
+              style={{ transformStyle: 'preserve-3d' }}
             >
               <InteractiveConsole />
-            </motion.div>
+            </div>
           </div>
         </Container>
       </section>
