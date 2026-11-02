@@ -84,7 +84,7 @@
   --accent: #7AA080;
   --accent-light: #8BA888;
   --border: rgba(255, 255, 255, 0.08);
-  --dot-color: rgba(245, 242, 236, 0.14);
+  --dot-color: rgba(245, 242, 236, 0.20);
   --color-danger: #E06C6C;
 
   --bg-base: var(--bg);
