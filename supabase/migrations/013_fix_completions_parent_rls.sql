@@ -33,3 +33,4 @@ create policy "day_subitem_completions: users can insert own" on day_subitem_com
         and h.user_id = auth.uid()
     )
   );
+
