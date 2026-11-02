@@ -56,6 +56,7 @@ begin
 end;
 $$;
 
+drop trigger if exists day_entries_updated_at on day_entries;
 create trigger day_entries_updated_at
   before update on day_entries
   for each row execute function update_updated_at();
@@ -108,6 +109,7 @@ create table if not exists month_reviews (
   unique(year, month)
 );
 
+drop trigger if exists month_reviews_updated_at on month_reviews;
 create trigger month_reviews_updated_at
   before update on month_reviews
   for each row execute function update_updated_at();

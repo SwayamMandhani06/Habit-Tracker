@@ -4,20 +4,20 @@
 -- =============================================================================
 
 -- Default Habits (13 top-level)
-insert into habits (id, name, type, sort_order, created_at) values
-  ('a1000000-0000-0000-0000-000000000001', 'Morning Routine',              'checklist', 1,  now()),
-  ('a1000000-0000-0000-0000-000000000002', 'Gym / Workout',                'checkbox',  2,  now()),
-  ('a1000000-0000-0000-0000-000000000003', '10k Steps',                    'checkbox',  3,  now()),
-  ('a1000000-0000-0000-0000-000000000004', 'Drink 4L Water',               'checkbox',  4,  now()),
-  ('a1000000-0000-0000-0000-000000000005', 'Healthy Diet & Creatine',      'checkbox',  5,  now()),
-  ('a1000000-0000-0000-0000-000000000006', 'Deep Work (2–3 Hours)',        'checkbox',  6,  now()),
-  ('a1000000-0000-0000-0000-000000000007', 'Skill Building (Coding / DSA / Projects)', 'checkbox', 7, now()),
-  ('a1000000-0000-0000-0000-000000000008', 'Book Reading',                 'checkbox',  8,  now()),
-  ('a1000000-0000-0000-0000-000000000009', 'Journaling',                   'checkbox',  9,  now()),
-  ('a1000000-0000-0000-0000-000000000010', 'Mandir / Prayer',              'checkbox',  10, now()),
-  ('a1000000-0000-0000-0000-000000000011', 'No Social Media / Reels',     'checkbox',  11, now()),
-  ('a1000000-0000-0000-0000-000000000012', 'No Fap',                       'checkbox',  12, now()),
-  ('a1000000-0000-0000-0000-000000000013', 'Night Routine',                'checklist', 13, now())
+insert into habits (id, name, type, sort_order, target_value, unit, step_value, color, icon, created_at) values
+  ('a1000000-0000-0000-0000-000000000001', 'Morning Routine',              'checklist', 1,  null, null, 1, 'amber', 'sunrise', now()),
+  ('a1000000-0000-0000-0000-000000000002', 'Gym / Workout',                'checkbox',  2,  null, null, 1, 'rose', 'dumbbell', now()),
+  ('a1000000-0000-0000-0000-000000000003', '10k Steps',                    'amount',    3,  10000, 'steps', 1000, 'teal', 'footprints', now()),
+  ('a1000000-0000-0000-0000-000000000004', 'Drink 4L Water',               'amount',    4,  4, 'L', 0.5, 'sky', 'droplet', now()),
+  ('a1000000-0000-0000-0000-000000000005', 'Healthy Diet & Creatine',      'checkbox',  5,  null, null, 1, 'sage', 'sparkles', now()),
+  ('a1000000-0000-0000-0000-000000000006', 'Deep Work (2–3 Hours)',        'amount',    6,  150, 'min', 15, 'slate', 'zap', now()),
+  ('a1000000-0000-0000-0000-000000000007', 'Skill Building (Coding / DSA / Projects)', 'checkbox', 7, null, null, 1, 'clay', 'crosshair', now()),
+  ('a1000000-0000-0000-0000-000000000008', 'Book Reading',                 'checkbox',  8,  null, null, 1, 'amber', 'book', now()),
+  ('a1000000-0000-0000-0000-000000000009', 'Journaling',                   'checkbox',  9,  null, null, 1, 'plum', 'pen-tool', now()),
+  ('a1000000-0000-0000-0000-000000000010', 'Mandir / Prayer',              'checkbox',  10, null, null, 1, 'sage', 'heart', now()),
+  ('a1000000-0000-0000-0000-000000000011', 'No Social Media / Reels',     'checkbox',  11, null, null, 1, 'rose', 'shield', now()),
+  ('a1000000-0000-0000-0000-000000000012', 'No Fap',                       'checkbox',  12, null, null, 1, 'slate', 'target', now()),
+  ('a1000000-0000-0000-0000-000000000013', 'Night Routine',                'checklist', 13, null, null, 1, 'plum', 'moon', now())
 on conflict (id) do nothing;
 
 -- Morning Routine sub-items (9)

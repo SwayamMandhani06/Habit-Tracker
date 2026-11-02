@@ -2,23 +2,40 @@
 // components/today/TodayClient.tsx — Daily check-in with refined typography & auto-save
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useRouter } from 'next/navigation'
 import type { HabitWithSubitems, DayEntry, DayCompletionState } from '@/lib/supabase/types'
-import { toggleHabitCompletionAction, toggleHabitSkipAction, toggleSubitemCompletionAction } from '@/actions/completion.actions'
+import {
+  toggleHabitCompletionAction,
+  toggleHabitSkipAction,
+  toggleSubitemCompletionAction,
+  setHabitAmountAction,
+} from '@/actions/completion.actions'
 import { updateDayEntryAction } from '@/actions/entry.actions'
-import { HabitRow } from './HabitRow'
+import { HabitCardView } from '@/components/habit/HabitCardView'
 import { SignalBarSelector } from './SignalBarSelector'
 import { CelebrationOverlay } from './CelebrationOverlay'
 import { WeeklyIntention } from './WeeklyIntention'
 import { FocusTimerModal } from './FocusTimerModal'
 import { playCompletionChime } from '@/lib/audio'
+import { addDays } from '@/lib/stats/habit-math'
 import Link from 'next/link'
-import { ArrowRight, Clock, SlidersHorizontal, Grid, Check } from 'lucide-react'
+import { ArrowRight, Clock, SlidersHorizontal, Grid, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Props {
   date: string
+  today?: string
   entry: DayEntry
   habits: HabitWithSubitems[]
   completions: DayCompletionState
+  weekStrip?: Array<{
+    date: string
+    dayLabel: string
+    dayNum: string
+    isViewing: boolean
+    isToday: boolean
+    isFuture: boolean
+    completionPct: number
+  }>
   yesterdayEmpty?: boolean
   yesterdayDate?: string
   initialIntention?: string
@@ -42,18 +59,55 @@ const MONTH_NAMES = [
 
 export function TodayClient({
   date,
+  today,
   entry,
   habits,
   completions,
+  weekStrip = [],
   yesterdayEmpty,
   yesterdayDate,
   initialIntention,
   recentDays = [],
   recentCompletions = {},
 }: Props) {
+  const router = useRouter()
   const [habitComps, setHabitComps] = useState(completions.habitCompletions)
   const [habitSkips, setHabitSkips] = useState<Record<string, boolean>>(completions.habitSkips ?? {})
   const [subitemComps, setSubitemComps] = useState(completions.subitemCompletions)
+  const [habitAmounts, setHabitAmounts] = useState<Record<string, number>>(completions.habitAmounts ?? {})
+  const [habitTargets, setHabitTargets] = useState<Record<string, number | null>>(completions.habitTargets ?? {})
+
+  // Status Filter: All, To Do, Done
+  const [statusFilter, setStatusFilter] = useState<'all' | 'todo' | 'done'>('all')
+
+  // Haptic feedback function for habit check
+  const triggerHaptic = useCallback(() => {
+    if (typeof window !== 'undefined' && typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate(8)
+      } catch {}
+    }
+  }, [])
+
+  // Week navigation
+  const handlePrevWeek = useCallback(() => {
+    if (weekStrip.length > 0) {
+      const prevMonday = addDays(weekStrip[0].date, -7)
+      router.push(`/today?date=${prevMonday}`)
+    }
+  }, [weekStrip, router])
+
+  const handleNextWeek = useCallback(() => {
+    if (weekStrip.length > 0) {
+      const nextMonday = addDays(weekStrip[0].date, 7)
+      const maxDate = today ?? date
+      if (nextMonday <= maxDate) {
+        router.push(`/today?date=${nextMonday}`)
+      } else if (today && weekStrip[0].date < today) {
+        router.push(`/today?date=${today}`)
+      }
+    }
+  }, [weekStrip, today, date, router])
 
   // 5-Day Minimal Strip & Focus Timer State
   const [viewMode, setViewMode] = useState<'classic' | 'minimal'>('classic')
@@ -82,6 +136,16 @@ export function TodayClient({
   const inFlightHabitsRef = useRef<Set<string>>(new Set())
   const inFlightSubitemsRef = useRef<Set<string>>(new Set())
   const inFlightSkipsRef = useRef<Set<string>>(new Set())
+
+  // Debouncing for amount habit updates (300ms)
+  const amountDebounceTimers = useRef<Record<string, NodeJS.Timeout>>({})
+  const lastCommittedAmounts = useRef<Record<string, number>>({})
+
+  useEffect(() => {
+    return () => {
+      Object.values(amountDebounceTimers.current).forEach((t) => clearTimeout(t))
+    }
+  }, [])
 
   // Ensure celebrations only trigger from real user actions, not page loads/re-renders
   const isUserActionRef = useRef(false)
@@ -115,8 +179,18 @@ export function TodayClient({
   }, [])
 
   const filteredHabits = habits.filter((h) => {
-    if (selectedCategory === 'all') return true
-    return getHabitCategory(h) === selectedCategory
+    if (selectedCategory !== 'all' && getHabitCategory(h) !== selectedCategory) {
+      return false
+    }
+    const isDone = habitComps[h.id] === true
+    const isSkipped = habitSkips[h.id] === true
+    if (statusFilter === 'todo') {
+      return !isDone && !isSkipped
+    }
+    if (statusFilter === 'done') {
+      return isDone
+    }
+    return true
   })
 
   // Debounced auto-save
@@ -191,6 +265,9 @@ export function TodayClient({
     if (next && prevSkip) {
       setHabitSkips((s) => ({ ...s, [habitId]: false }))
     }
+    if (next) {
+      triggerHaptic()
+    }
 
     toggleHabitCompletionAction({ date, habitId, isCompleted: next })
       .then((res) => {
@@ -233,6 +310,9 @@ export function TodayClient({
       setHabitComps((c) => ({ ...c, [habitId]: allDone }))
       if (next && prevSkip) {
         setHabitSkips((s) => ({ ...s, [habitId]: false }))
+      }
+      if (next) {
+        triggerHaptic()
       }
 
       toggleSubitemCompletionAction({
@@ -300,6 +380,73 @@ export function TodayClient({
       })
   }, [habitSkips, date])
 
+  const handleSetAmount = useCallback(
+    (habit: HabitWithSubitems, newAmount: number) => {
+      const habitId = habit.id
+      isUserActionRef.current = true
+
+      const cleanAmount = Math.max(0, Math.min(1_000_000, Math.round(newAmount * 100) / 100))
+      const prevAmount = habitAmounts[habitId] ?? 0
+      const prevCompleted = habitComps[habitId] ?? false
+      const prevSkip = habitSkips[habitId] ?? false
+
+      if (lastCommittedAmounts.current[habitId] === undefined) {
+        lastCommittedAmounts.current[habitId] = prevAmount
+      }
+
+      const target = habitTargets[habitId] !== undefined ? habitTargets[habitId] : (habit.target_value ?? null)
+      const isComplete = target !== null ? cleanAmount >= target : false
+
+      // Optimistic updates
+      setHabitAmounts((prev) => ({ ...prev, [habitId]: cleanAmount }))
+      setHabitComps((prev) => ({ ...prev, [habitId]: isComplete }))
+      if (isComplete && prevSkip) {
+        setHabitSkips((s) => ({ ...s, [habitId]: false }))
+      }
+
+      if (isComplete && !prevCompleted) {
+        try {
+          triggerHaptic()
+          playCompletionChime()
+        } catch {}
+      }
+
+      // 300ms debounce: rapid taps (+ + +) collapse into one write
+      if (amountDebounceTimers.current[habitId]) {
+        clearTimeout(amountDebounceTimers.current[habitId])
+      }
+
+      amountDebounceTimers.current[habitId] = setTimeout(async () => {
+        try {
+          const res = await setHabitAmountAction({ habitId, date, amount: cleanAmount })
+          if (res?.error) {
+            const rollbackAmt = lastCommittedAmounts.current[habitId] ?? prevAmount
+            const rollbackComp = target !== null ? rollbackAmt >= target : false
+            setHabitAmounts((prev) => ({ ...prev, [habitId]: rollbackAmt }))
+            setHabitComps((prev) => ({ ...prev, [habitId]: rollbackComp }))
+            setActionError(`Could not save amount: ${res.error}`)
+            setTimeout(() => setActionError(null), 3500)
+          } else {
+            lastCommittedAmounts.current[habitId] = cleanAmount
+            if (res?.targetSnapshot !== undefined) {
+              setHabitTargets((prev) => ({ ...prev, [habitId]: res.targetSnapshot }))
+            }
+          }
+        } catch {
+          const rollbackAmt = lastCommittedAmounts.current[habitId] ?? prevAmount
+          const rollbackComp = target !== null ? rollbackAmt >= target : false
+          setHabitAmounts((prev) => ({ ...prev, [habitId]: rollbackAmt }))
+          setHabitComps((prev) => ({ ...prev, [habitId]: rollbackComp }))
+          setActionError('Network error saving amount')
+          setTimeout(() => setActionError(null), 3500)
+        } finally {
+          delete amountDebounceTimers.current[habitId]
+        }
+      }, 300)
+    },
+    [habitAmounts, habitComps, habitSkips, habitTargets, date]
+  )
+
   const handleToggleDay = useCallback((targetDate: string, habitId: string) => {
     if (targetDate === date) {
       handleToggleHabit(habitId)
@@ -318,6 +465,7 @@ export function TodayClient({
     }))
 
     if (nextVal) {
+      triggerHaptic()
       playCompletionChime()
     }
 
@@ -463,6 +611,168 @@ export function TodayClient({
         )}
       </AnimatePresence>
 
+      {/* ── 7-DAY WEEK STRIP WITH COMPLETION RINGS ──────────────────── */}
+      {weekStrip.length > 0 && (
+        <div className="mb-6 p-3 sm:p-4 rounded-2xl bg-[var(--surface)] border border-[var(--border)] shadow-2xs select-none">
+          {/* Week Label & Navigation Buttons */}
+          <div className="flex items-center justify-between mb-3 font-mono text-xs">
+            <button
+              type="button"
+              onClick={handlePrevWeek}
+              className="p-2 rounded-lg border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Previous week"
+            >
+              <ChevronLeft size={18} />
+            </button>
+
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-[var(--text-primary)] tracking-wide">
+                {weekStrip[0].dayNum} {MONTH_NAMES[parseInt(weekStrip[0].date.slice(5, 7), 10) - 1]?.slice(0, 3)} –{' '}
+                {weekStrip[6].dayNum} {MONTH_NAMES[parseInt(weekStrip[6].date.slice(5, 7), 10) - 1]?.slice(0, 3)}
+              </span>
+              {date !== (today ?? date) && (
+                <button
+                  type="button"
+                  onClick={() => router.push(today ? `/today?date=${today}` : '/today')}
+                  className="text-[10px] uppercase font-bold px-3 py-2 rounded bg-[var(--accent)]/15 text-[var(--accent)] hover:bg-[var(--accent)]/25 transition-colors cursor-pointer min-h-[44px] inline-flex items-center"
+                >
+                  Today
+                </button>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleNextWeek}
+              disabled={Boolean(today && weekStrip[0].date >= today)}
+              className="p-2 rounded-lg border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95 transition-all cursor-pointer disabled:opacity-30 disabled:pointer-events-none min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Next week"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
+
+          {/* 7 Day Circles with SVG Progress Rings (Swipe/Drag supported) */}
+          <motion.div
+            drag="x"
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.2}
+            onDragEnd={(_, info) => {
+              if (info.offset.x > 50 || info.velocity.x > 350) {
+                handlePrevWeek()
+              } else if (info.offset.x < -50 || info.velocity.x < -350) {
+                handleNextWeek()
+              }
+            }}
+            className="grid grid-cols-7 gap-1 sm:gap-2 touch-pan-y"
+          >
+            {weekStrip.map((day) => {
+              const isViewing = day.isViewing
+              const isFuture = day.isFuture
+              const isToday = day.isToday
+              const pctVal = isViewing ? pct : day.completionPct
+
+              return (
+                <button
+                  key={day.date}
+                  type="button"
+                  disabled={isFuture}
+                  onClick={() => {
+                    if (!isFuture && !isViewing) {
+                      router.push(`/today?date=${day.date}`)
+                    }
+                  }}
+                  className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all min-h-[58px] select-none ${
+                    isViewing
+                      ? 'bg-[var(--surface-raised)] border border-[var(--accent)] shadow-xs scale-[1.03]'
+                      : isFuture
+                      ? 'opacity-30 cursor-not-allowed'
+                      : 'hover:bg-[var(--surface-raised)]/60 cursor-pointer'
+                  }`}
+                  aria-label={`${day.dayLabel} ${day.date}, ${pctVal}% completed`}
+                  aria-current={isViewing ? 'date' : undefined}
+                >
+                  <span
+                    className={`font-mono text-[10px] uppercase font-bold tracking-wider mb-1 ${
+                      isViewing
+                        ? 'text-[var(--accent)]'
+                        : isToday
+                        ? 'text-[var(--text-primary)] font-extrabold'
+                        : 'text-[var(--text-muted)]'
+                    }`}
+                  >
+                    {day.dayLabel}
+                  </span>
+
+                  {/* SVG Completion Ring */}
+                  <div className="relative w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center">
+                    <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                      <circle
+                        cx="18"
+                        cy="18"
+                        r="14"
+                        fill="none"
+                        stroke="var(--border)"
+                        strokeWidth="2.8"
+                      />
+                      <circle
+                        cx="18"
+                        cy="18"
+                        r="14"
+                        fill="none"
+                        stroke="var(--accent)"
+                        strokeWidth="2.8"
+                        strokeDasharray="88"
+                        strokeDashoffset={88 - (88 * Math.min(100, pctVal)) / 100}
+                        strokeLinecap="round"
+                        className="transition-all duration-300"
+                      />
+                    </svg>
+                    <span
+                      className={`absolute font-mono text-[10px] sm:text-xs font-bold ${
+                        isViewing
+                          ? 'text-[var(--text-primary)]'
+                          : isToday
+                          ? 'text-[var(--accent)]'
+                          : 'text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {day.dayNum}
+                    </span>
+                  </div>
+
+                  {/* Tiny Today Indicator Dot */}
+                  {isToday && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] mt-1" />
+                  )}
+                </button>
+              )
+            })}
+          </motion.div>
+        </div>
+      )}
+
+      {/* ── STICKY COMPLETION HEADER ──────────────────────────────────── */}
+      <div className="sticky top-0 z-30 -mx-4 px-4 py-2.5 bg-[var(--bg)]/95 backdrop-blur-md border-b border-[var(--border)] mb-4 flex items-center justify-between shadow-2xs">
+        <div className="flex items-center gap-2 font-mono text-xs font-semibold text-[var(--text-primary)]">
+          <span className="text-[var(--accent)]">[</span>
+          <span>
+            {completedCount} of {totalCount} Done
+          </span>
+          <span className="text-[var(--accent)]">]</span>
+          <span className="text-[var(--text-muted)]">&middot;</span>
+          <span className="font-bold text-[var(--accent)]">{pct}%</span>
+        </div>
+        <div className="w-24 sm:w-36 h-2 bg-[var(--border)] rounded-full overflow-hidden">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${pct}%` }}
+            transition={{ duration: 0.3 }}
+            className="h-full bg-[var(--accent)] rounded-full"
+          />
+        </div>
+      </div>
+
       {/* Header with Compact Progress: X/13 · X% · today's date */}
       <motion.div
         initial={{ opacity: 0, y: -6 }}
@@ -473,7 +783,7 @@ export function TodayClient({
           backgroundColor: 'var(--surface)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
-          marginBottom: 32,
+          marginBottom: 24,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
@@ -496,10 +806,10 @@ export function TodayClient({
                 setFocusTimerHabit(null)
                 setFocusTimerOpen(true)
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--accent)] font-mono text-xs font-semibold hover:border-[var(--accent)] active:scale-95 transition-all shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--accent)] font-mono text-xs font-semibold hover:border-[var(--accent)] active:scale-95 transition-all shadow-2xs cursor-pointer min-h-[44px]"
               title="Open Pomodoro & Focus Clock"
             >
-              <Clock size={12} />
+              <Clock size={14} />
               <span>Focus Timer</span>
             </button>
           </div>
@@ -549,6 +859,38 @@ export function TodayClient({
           />
         </div>
       </motion.div>
+
+      {/* ── FILTER CHIPS (All, To Do, Done) ───────────────────────────── */}
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto no-scrollbar select-none">
+        {[
+          { key: 'all', label: 'All', count: activeHabits.length },
+          { key: 'todo', label: 'To Do', count: activeHabits.filter((h) => !habitComps[h.id]).length },
+          { key: 'done', label: 'Done', count: activeHabits.filter((h) => habitComps[h.id]).length },
+        ].map((chip) => (
+          <button
+            key={chip.key}
+            type="button"
+            onClick={() => setStatusFilter(chip.key as any)}
+            className={`px-3.5 py-2.5 rounded-full font-mono text-xs font-semibold transition-all flex items-center gap-1.5 min-h-[44px] cursor-pointer ${
+              statusFilter === chip.key
+                ? 'bg-[var(--accent)] text-white shadow-xs'
+                : 'bg-[var(--surface-raised)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)]'
+            }`}
+            aria-pressed={statusFilter === chip.key}
+          >
+            <span>{chip.label}</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                statusFilter === chip.key
+                  ? 'bg-black/25 text-white'
+                  : 'bg-[var(--surface)] text-[var(--text-muted)]'
+              }`}
+            >
+              {chip.count}
+            </span>
+          </button>
+        ))}
+      </div>
 
       {/* ── HABITS LIST & VIEW SWITCHER ───────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -689,6 +1031,21 @@ export function TodayClient({
                 : recentComps[d.date]?.[habit.id] ?? false
             }
 
+            const isCompleted = habitComps[habit.id] ?? false
+            const isSkipped = habitSkips[habit.id] ?? false
+            const currentAmt = habitAmounts[habit.id] ?? 0
+            const targetVal = habitTargets[habit.id] !== undefined ? habitTargets[habit.id] : (habit.target_value ?? null)
+            const progressPct =
+              habit.type === 'amount' && targetVal && targetVal > 0
+                ? Math.min(100, Math.round((currentAmt / targetVal) * 100))
+                : habit.type === 'checklist' && habit.subitems?.length
+                ? Math.round(
+                    (habit.subitems.filter((s) => subitemComps[s.id] === true).length / habit.subitems.length) * 100
+                  )
+                : isCompleted
+                ? 100
+                : 0
+
             return (
               <motion.div
                 key={habit.id}
@@ -696,16 +1053,37 @@ export function TodayClient({
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: i * 0.025, duration: 0.3 }}
               >
-                <HabitRow
-                  habit={habit}
-                  isCompleted={habitComps[habit.id] ?? false}
-                  isSkipped={habitSkips[habit.id] ?? false}
-                  subitemCompletions={subitemComps}
+                <HabitCardView
+                  habitId={habit.id}
+                  variant={habit.type as 'amount' | 'checkbox' | 'checklist'}
+                  title={habit.name}
+                  subtitle={habit.notes}
+                  icon={habit.icon}
+                  accentColor={habit.color}
+                  completed={isCompleted}
+                  isSkipped={isSkipped}
+                  progressPct={progressPct}
+                  currentAmount={currentAmt}
+                  targetAmount={targetVal}
+                  unit={habit.unit}
+                  stepValue={habit.step_value ?? 1}
+                  onSetAmount={(val) => handleSetAmount(habit, val)}
+                  subitems={habit.subitems.map((s) => ({
+                    id: s.id,
+                    name: s.name,
+                    completed: subitemComps[s.id] ?? false,
+                  }))}
+                  onToggleSubitem={(subitemId) =>
+                    handleToggleSubitem(
+                      habit.id,
+                      subitemId,
+                      habit.subitems.map((s) => s.id)
+                    )
+                  }
                   onToggle={() => handleToggleHabit(habit.id)}
                   onToggleSkip={() => handleToggleSkip(habit.id)}
-                  onToggleSubitem={(subitemId, allIds) => handleToggleSubitem(habit.id, subitemId, allIds)}
-                  onOpenTimer={(h) => {
-                    setFocusTimerHabit(h)
+                  onOpenTimer={() => {
+                    setFocusTimerHabit(habit)
                     setFocusTimerOpen(true)
                   }}
                   minimalMode={viewMode === 'minimal'}

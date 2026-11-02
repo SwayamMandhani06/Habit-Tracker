@@ -10,15 +10,41 @@ import { z } from 'zod'
 
 const createSchema = z.object({
   name: z.string().trim().min(1, 'Habit name is required').max(100),
-  type: z.enum(['checkbox', 'checklist']),
+  type: z.enum(['checkbox', 'checklist', 'amount']),
   notes: z.string().trim().max(500).nullable().optional(),
+  target_value: z.number().positive().max(1_000_000).nullable().optional(),
+  unit: z.string().trim().max(16).nullable().optional(),
+  step_value: z.number().positive().max(100_000).optional(),
+  color: z.enum(['sage', 'clay', 'sky', 'amber', 'plum', 'rose', 'slate', 'teal']).optional(),
+  icon: z.string().max(32).optional(),
+}).refine(data => {
+  if (data.type === 'amount') {
+    return data.target_value != null && data.target_value > 0 && !!data.unit?.trim()
+  }
+  return true
+}, {
+  message: 'Amount habits require a positive target value and a unit',
+  path: ['target_value']
 })
 
 const updateSchema = z.object({
   id: z.string().uuid(),
   name: z.string().min(1).max(100).optional(),
-  type: z.enum(['checkbox', 'checklist']).optional(),
+  type: z.enum(['checkbox', 'checklist', 'amount']).optional(),
   notes: z.string().max(500).nullable().optional(),
+  target_value: z.number().positive().max(1_000_000).nullable().optional(),
+  unit: z.string().trim().max(16).nullable().optional(),
+  step_value: z.number().positive().max(100_000).optional(),
+  color: z.enum(['sage', 'clay', 'sky', 'amber', 'plum', 'rose', 'slate', 'teal']).optional(),
+  icon: z.string().max(32).optional(),
+}).refine(data => {
+  if (data.type === 'amount') {
+    return data.target_value != null && data.target_value > 0 && !!data.unit?.trim()
+  }
+  return true
+}, {
+  message: 'Amount habits require a positive target value and a unit',
+  path: ['target_value']
 })
 
 const idSchema = z.object({ id: z.string().uuid() })
@@ -41,10 +67,10 @@ export async function createHabitAction(input: z.infer<typeof createSchema>) {
   if (!user || authError) return { error: 'Not authenticated' }
 
   const r = createSchema.safeParse(input)
-  if (!r.success) return { error: 'Invalid input' }
+  if (!r.success) return { error: r.error.errors[0]?.message ?? 'Invalid input' }
 
   try {
-    const habit = await createHabit(r.data.name, r.data.type, r.data.notes)
+    const habit = await createHabit(r.data)
     revalidateAllHabitPaths()
     return { success: true, habit }
   } catch (e) {
@@ -58,7 +84,7 @@ export async function updateHabitAction(input: z.infer<typeof updateSchema>) {
   if (!user || authError) return { error: 'Not authenticated' }
 
   const r = updateSchema.safeParse(input)
-  if (!r.success) return { error: 'Invalid input' }
+  if (!r.success) return { error: r.error.errors[0]?.message ?? 'Invalid input' }
 
   // Verify ownership before mutation
   const { data: existing, error: findError } = await supabase

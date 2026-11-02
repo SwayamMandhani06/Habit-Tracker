@@ -9,6 +9,7 @@ import { SignalBarSelector } from '@/components/today/SignalBarSelector'
 import { HabitRow } from '@/components/today/HabitRow'
 import { toggleHabitCompletionAction, toggleSubitemCompletionAction, toggleHabitSkipAction } from '@/actions/completion.actions'
 import { updateDayEntryAction } from '@/actions/entry.actions'
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet'
 
 interface Props {
   date: string
@@ -42,9 +43,10 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
   }>({})
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const d = new Date(date + 'T00:00:00')
-  const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][d.getDay()]
-  const dateLabel = `${dayName}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
+  const [y, m, dayNum] = date.split('-').map(Number)
+  const dUtc = new Date(Date.UTC(y, m - 1, dayNum))
+  const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dUtc.getUTCDay()]
+  const dateLabel = `${dayName}, ${MONTH_NAMES[m - 1]} ${dayNum}, ${y}`
 
   const flushSave = useCallback(async () => {
     if (saveTimerRef.current) {
@@ -220,65 +222,13 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
   const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
 
   return (
-    <>
-      {/* Backdrop */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={handleClose}
-        style={{
-          position: 'fixed', inset: 0,
-          background: 'rgba(0,0,0,0.6)',
-          backdropFilter: 'blur(4px)',
-          zIndex: 100,
-        }}
-      />
-
-      {/* Modal */}
-      <motion.div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="day-entry-modal-title"
-        initial={{ opacity: 0, y: 40, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.98 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          maxHeight: '90dvh',
-          overflowY: 'auto',
-          background: 'var(--bg-surface-1)',
-          borderRadius: 'var(--radius-2xl) var(--radius-2xl) 0 0',
-          zIndex: 101,
-          padding: '24px 20px 40px',
-        }}
-      >
-        {/* Handle */}
-        <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border-strong)', margin: '0 auto 20px' }} />
-
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-          <div>
-            <p className="text-label" style={{ color: 'var(--ink-tertiary)', marginBottom: '2px' }}>Entry</p>
-            <h2 id="day-entry-modal-title" style={{ fontSize: '1.125rem', fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--ink-primary)' }}>
-              {dateLabel}
-            </h2>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span className="text-mono" style={{ fontSize: '1.25rem', fontWeight: 300, color: 'var(--accent)' }}>
-              {pct}%
-            </span>
-            <button className="btn-icon" onClick={handleClose} aria-label="Close dialog">
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-
+    <ResponsiveSheet
+      isOpen={true}
+      onClose={handleClose}
+      title={dateLabel}
+      description={`${pct}% completed · Habits and reflections`}
+    >
+      <div ref={modalRef} className="p-4 space-y-4 overflow-y-auto">
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 48 }} />)}
@@ -458,7 +408,7 @@ export function DayEntryModal({ date, habits, onClose }: Props) {
             </div>
           </>
         )}
-      </motion.div>
-    </>
+      </div>
+    </ResponsiveSheet>
   )
 }

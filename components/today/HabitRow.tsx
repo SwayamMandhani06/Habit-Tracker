@@ -1,6 +1,7 @@
 'use client'
 // components/today/HabitRow.tsx — Habit row with spring checkbox pop, long-press/right-click skip menu
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Check, Minus, Plus, Clock } from 'lucide-react'
 import type { HabitWithSubitems } from '@/lib/supabase/types'
@@ -184,7 +185,10 @@ export function HabitRow({
 
           {/* Habit Name */}
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-            <span
+            <Link
+              href={`/habits/${habit.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:underline hover:text-[var(--accent)] transition-colors"
               style={{
                 fontSize: '0.95rem',
                 fontFamily: 'var(--font-mono)',
@@ -193,14 +197,13 @@ export function HabitRow({
                 color: isCompleted || isSkipped ? 'var(--text-muted)' : 'var(--text-primary)',
                 textDecorationLine: isCompleted || isSkipped ? 'line-through' : 'none',
                 textDecorationColor: 'var(--border)',
-                transition: 'color 0.15s ease',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
             >
               {habit.name}
-            </span>
+            </Link>
 
             {isSkipped && (
               <span

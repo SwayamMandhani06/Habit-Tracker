@@ -11,7 +11,13 @@ async function getAuthenticatedUserId(client: Awaited<ReturnType<typeof db>>): P
   return user.id
 }
 
-type HabitCompRow = { habit_id: string; is_completed: boolean; is_skipped?: boolean }
+type HabitCompRow = {
+  habit_id: string
+  is_completed: boolean
+  is_skipped?: boolean
+  amount?: number | null
+  target_snapshot?: number | null
+}
 type SubitemCompRow = { subitem_id: string; is_completed: boolean }
 
 export async function getDayCompletions(dayEntryId: string): Promise<DayCompletionState> {
@@ -21,17 +27,26 @@ export async function getDayCompletions(dayEntryId: string): Promise<DayCompleti
 
   const habitRes = await client
     .from('day_habit_completions')
-    .select('habit_id, is_completed, is_skipped')
+    .select('habit_id, is_completed, is_skipped, amount, target_snapshot')
     .eq('day_entry_id', dayEntryId)
     .eq('user_id', userId)
 
-  if (habitRes.error && habitRes.error.message.includes('is_skipped')) {
+  if (habitRes.error) {
     const fallback = await client
       .from('day_habit_completions')
-      .select('habit_id, is_completed')
+      .select('habit_id, is_completed, is_skipped')
       .eq('day_entry_id', dayEntryId)
       .eq('user_id', userId)
-    habitComps = (fallback.data ?? []) as HabitCompRow[]
+    if (fallback.error) {
+      const fallback2 = await client
+        .from('day_habit_completions')
+        .select('habit_id, is_completed')
+        .eq('day_entry_id', dayEntryId)
+        .eq('user_id', userId)
+      habitComps = (fallback2.data ?? []) as HabitCompRow[]
+    } else {
+      habitComps = (fallback.data ?? []) as HabitCompRow[]
+    }
   } else {
     habitComps = (habitRes.data ?? []) as HabitCompRow[]
   }
@@ -44,10 +59,19 @@ export async function getDayCompletions(dayEntryId: string): Promise<DayCompleti
 
   const habitCompletions: Record<string, boolean> = {}
   const habitSkips: Record<string, boolean> = {}
+  const habitAmounts: Record<string, number> = {}
+  const habitTargets: Record<string, number | null> = {}
+
   for (const row of habitComps) {
     habitCompletions[row.habit_id] = row.is_completed
     if (row.is_skipped) {
       habitSkips[row.habit_id] = true
+    }
+    if (row.amount !== undefined && row.amount !== null) {
+      habitAmounts[row.habit_id] = Number(row.amount)
+    }
+    if (row.target_snapshot !== undefined) {
+      habitTargets[row.habit_id] = row.target_snapshot !== null ? Number(row.target_snapshot) : null
     }
   }
 
@@ -56,7 +80,7 @@ export async function getDayCompletions(dayEntryId: string): Promise<DayCompleti
     subitemCompletions[row.subitem_id] = row.is_completed
   }
 
-  return { habitCompletions, subitemCompletions, habitSkips }
+  return { habitCompletions, subitemCompletions, habitSkips, habitAmounts, habitTargets }
 }
 
 export async function toggleHabitCompletion(dayEntryId: string, habitId: string, isCompleted: boolean): Promise<void> {
@@ -88,6 +112,47 @@ export async function toggleHabitCompletion(dayEntryId: string, habitId: string,
   }
 
   if (error) throw new Error(`toggleHabitCompletion: ${error.message}`)
+}
+
+export async function setHabitAmount(
+  dayEntryId: string,
+  habitId: string,
+  amount: number,
+  targetSnapshot: number | null,
+  isCompleted: boolean,
+  userId: string
+): Promise<void> {
+  const client = await db()
+  const payload: Database['public']['Tables']['day_habit_completions']['Insert'] = {
+    day_entry_id: dayEntryId,
+    habit_id: habitId,
+    amount,
+    target_snapshot: targetSnapshot,
+    is_completed: isCompleted,
+    is_skipped: false,
+    user_id: userId,
+  }
+
+  let { error } = await client
+    .from('day_habit_completions')
+    .upsert(payload, { onConflict: 'day_entry_id,habit_id' })
+
+  // Fallback if migration not executed yet: save is_completed without amount/target_snapshot
+  if (error && (error.message.includes('amount') || error.message.includes('target_snapshot'))) {
+    const fallback: Database['public']['Tables']['day_habit_completions']['Insert'] = {
+      day_entry_id: dayEntryId,
+      habit_id: habitId,
+      is_completed: isCompleted,
+      is_skipped: false,
+      user_id: userId,
+    }
+    const res = await client
+      .from('day_habit_completions')
+      .upsert(fallback, { onConflict: 'day_entry_id,habit_id' })
+    error = res.error
+  }
+
+  if (error) throw new Error(`setHabitAmount: ${error.message}`)
 }
 
 export async function toggleHabitSkip(dayEntryId: string, habitId: string, isSkipped: boolean): Promise<void> {
@@ -155,7 +220,14 @@ export async function syncChecklistParent(
 }
 
 export async function getCompletionsForMonth(year: number, month: number): Promise<{
-  habitCompletions: Array<{ day_entry_id: string; habit_id: string; is_completed: boolean; is_skipped?: boolean }>
+  habitCompletions: Array<{
+    day_entry_id: string
+    habit_id: string
+    is_completed: boolean
+    is_skipped?: boolean
+    amount?: number
+    target_snapshot?: number | null
+  }>
   subitemCompletions: Array<{ day_entry_id: string; subitem_id: string; is_completed: boolean }>
 }> {
   const client = await db()
@@ -172,22 +244,39 @@ export async function getCompletionsForMonth(year: number, month: number): Promi
   const entryIds = ((entries ?? []) as { id: string }[]).map(e => e.id)
   if (entryIds.length === 0) return { habitCompletions: [], subitemCompletions: [] }
 
-  let habitComps: Array<{ day_entry_id: string; habit_id: string; is_completed: boolean; is_skipped?: boolean }> = []
+  let habitComps: Array<{
+    day_entry_id: string
+    habit_id: string
+    is_completed: boolean
+    is_skipped?: boolean
+    amount?: number
+    target_snapshot?: number | null
+  }> = []
+
   const hcRes = await client
     .from('day_habit_completions')
-    .select('day_entry_id, habit_id, is_completed, is_skipped')
+    .select('day_entry_id, habit_id, is_completed, is_skipped, amount, target_snapshot')
     .eq('user_id', userId)
     .in('day_entry_id', entryIds)
 
-  if (hcRes.error && hcRes.error.message.includes('is_skipped')) {
+  if (hcRes.error) {
     const fallback = await client
       .from('day_habit_completions')
-      .select('day_entry_id, habit_id, is_completed')
+      .select('day_entry_id, habit_id, is_completed, is_skipped')
       .eq('user_id', userId)
       .in('day_entry_id', entryIds)
-    habitComps = (fallback.data ?? [])
+    if (fallback.error) {
+      const fallback2 = await client
+        .from('day_habit_completions')
+        .select('day_entry_id, habit_id, is_completed')
+        .eq('user_id', userId)
+        .in('day_entry_id', entryIds)
+      habitComps = (fallback2.data ?? []) as any
+    } else {
+      habitComps = (fallback.data ?? []) as any
+    }
   } else {
-    habitComps = (hcRes.data ?? [])
+    habitComps = (hcRes.data ?? []) as any
   }
 
   const { data: sc } = await client

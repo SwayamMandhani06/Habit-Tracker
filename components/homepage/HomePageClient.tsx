@@ -190,7 +190,7 @@ export function HomePageClient() {
         <Container className="flex items-center justify-between">
           <Link
             href="/"
-            className="flex items-center gap-2.5 font-mono text-sm font-bold tracking-tight hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2.5 font-mono text-sm font-bold tracking-tight hover:opacity-80 transition-opacity min-h-[44px]"
             style={{ color: 'var(--text-primary)' }}
           >
             <span className="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse" />
@@ -202,7 +202,7 @@ export function HomePageClient() {
             {isLoggedIn ? (
               <Link
                 href="/dashboard"
-                className="font-mono text-xs font-bold px-5 py-2.5 rounded-full text-white transition-all active:scale-95 hover:opacity-90"
+                className="font-mono text-xs font-bold px-5 py-3 rounded-full text-white transition-all active:scale-95 hover:opacity-90 min-h-[44px] inline-flex items-center"
                 style={{ backgroundColor: 'var(--accent)' }}
               >
                 Go to Dashboard →
@@ -211,14 +211,14 @@ export function HomePageClient() {
               <>
                 <Link
                   href="/login"
-                  className="font-mono text-xs font-semibold hover:opacity-75 transition-opacity"
+                  className="font-mono text-xs font-semibold hover:opacity-75 transition-opacity min-h-[44px] min-w-[44px] inline-flex items-center justify-center px-2"
                   style={{ color: 'var(--text-muted)' }}
                 >
                   Log In
                 </Link>
                 <Link
                   href="/login"
-                  className="font-mono text-xs font-bold px-5 py-2.5 rounded-full text-white transition-all active:scale-95 hover:opacity-90"
+                  className="font-mono text-xs font-bold px-5 py-3 rounded-full text-white transition-all active:scale-95 hover:opacity-90 min-h-[44px] inline-flex items-center"
                   style={{ backgroundColor: 'var(--accent)' }}
                 >
                   Start Free →
@@ -780,7 +780,11 @@ export function HomePageClient() {
           </div>
           <div className="flex items-center gap-6">
             <span>Made by Swayam · 2026</span>
-            <Link href={isLoggedIn ? "/dashboard" : "/login"} className="font-bold hover:underline" style={{ color: 'var(--accent)' }}>
+            <Link
+              href={isLoggedIn ? "/dashboard" : "/login"}
+              className="font-bold hover:underline min-h-[44px] inline-flex items-center px-2"
+              style={{ color: 'var(--accent)' }}
+            >
               {isLoggedIn ? 'Dashboard →' : 'Start Free →'}
             </Link>
           </div>

@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Grid, Columns } from 'lucide-react'
 import type { DailyScore, HabitWithSubitems } from '@/lib/supabase/types'
-import { getMonthDateRange } from '@/lib/date'
+import { getMonthDateRange, weekDates, addDays } from '@/lib/date'
 import { DayEntryModal } from './DayEntryModal'
 
 interface Props {
@@ -82,30 +82,27 @@ export function CalendarView({ scores, habits, today }: Props) {
     }
   }
 
-  // Week days calculation
+  // Week days calculation via pure date module (Sunday start: weekStartsOn = 0)
   const weekDays = useMemo(() => {
-    const current = new Date(todayD)
-    // Find previous Sunday
-    const dayOfWeek = current.getDay()
-    current.setDate(current.getDate() - dayOfWeek + weekOffset * 7)
+    const centerDate = weekOffset === 0 ? today : addDays(today, weekOffset * 7)
+    const dates = weekDates(centerDate, 0)
 
-    return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(current)
-      d.setDate(current.getDate() + i)
-      const dateStr = d.toISOString().slice(0, 10)
+    return dates.map((dateStr, i) => {
+      const monthIndex = Number(dateStr.slice(5, 7)) - 1
+      const dayNum = Number(dateStr.slice(8, 10))
       const score = scoreMap.get(dateStr)
       return {
         dateStr,
         dayName: DAYS[i],
-        dayNum: d.getDate(),
-        monthName: MONTHS[d.getMonth()].slice(0, 3),
+        dayNum,
+        monthName: MONTHS[monthIndex].slice(0, 3),
         score,
         pct: score ? Number(score.completion_pct) : undefined,
         isToday: dateStr === today,
         isFuture: dateStr > today,
       }
     })
-  }, [todayD, weekOffset, today, scoreMap])
+  }, [today, weekOffset, scoreMap])
 
   // Month days calculation
   const firstDay = new Date(year, month, 1).getDay()
@@ -472,7 +469,7 @@ export function CalendarView({ scores, habits, today }: Props) {
         >
           {MONTHS.map((mName, mIdx) => {
             const mFirstDay = new Date(year, mIdx, 1).getDay()
-            const mDaysCount = new Date(Date.UTC(year, mIdx + 1, 0)).getUTCDate()
+            const { daysInMonth: mDaysCount } = getMonthDateRange(year, mIdx + 1)
 
             return (
               <div

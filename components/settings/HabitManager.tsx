@@ -19,6 +19,9 @@ import {
   createHabitAction, updateHabitAction, reorderHabitsAction, archiveHabitAction, unarchiveHabitAction, deleteHabitAction,
   addSubitemAction, updateSubitemAction, removeSubitemAction, reorderSubitemsAction,
 } from '@/actions/habit.actions'
+import { HABIT_COLORS, HABIT_ICONS, UNIT_PRESETS, getHabitColorVar, renderHabitIcon } from '@/lib/habit-theme'
+import { HabitCardView } from '@/components/habit/HabitCardView'
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet'
 
 interface Props { initialHabits: HabitWithSubitems[] }
 
@@ -144,17 +147,231 @@ function HabitNotesSection({
   )
 }
 
+// ── Customizer Fields (Type, Target, Unit, Step, Palette Color, Icon) ─────────
+
+function HabitCustomizerFields({
+  type,
+  setType,
+  targetValue,
+  setTargetValue,
+  unit,
+  setUnit,
+  stepValue,
+  setStepValue,
+  color,
+  setColor,
+  icon,
+  setIcon,
+}: {
+  type: 'checkbox' | 'checklist' | 'amount'
+  setType: (t: 'checkbox' | 'checklist' | 'amount') => void
+  targetValue: number
+  setTargetValue: (v: number) => void
+  unit: string
+  setUnit: (u: string) => void
+  stepValue: number
+  setStepValue: (s: number) => void
+  color: string
+  setColor: (c: string) => void
+  icon: string
+  setIcon: (i: string) => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
+      {/* Type Selector */}
+      <div>
+        <label className="text-label" style={{ fontSize: '0.6875rem', marginBottom: '4px', display: 'block' }}>Habit Type</label>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          {(['checkbox', 'checklist', 'amount'] as const).map(t => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setType(t)}
+              className="btn btn-ghost"
+              style={{
+                flex: 1,
+                fontSize: '0.75rem',
+                textTransform: 'capitalize',
+                padding: '6px 8px',
+                border: type === t ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                backgroundColor: type === t ? 'var(--accent-glow)' : 'var(--surface)',
+                color: type === t ? 'var(--accent)' : 'var(--text-muted)',
+                fontWeight: type === t ? 600 : 400,
+              }}
+            >
+              {t === 'checkbox' ? 'Checkbox' : t === 'checklist' ? 'Checklist' : 'Amount'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Amount Specifics */}
+      {type === 'amount' && (
+        <div style={{ padding: '10px', backgroundColor: 'var(--surface)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+            <div>
+              <label className="text-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Daily Target</label>
+              <input
+                type="number"
+                min="0.01"
+                max="1000000"
+                step="any"
+                className="input"
+                value={targetValue}
+                onChange={e => setTargetValue(parseFloat(e.target.value) || 0)}
+                style={{ width: '100%', padding: '5px 8px', fontSize: '0.8125rem' }}
+              />
+            </div>
+            <div>
+              <label className="text-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Step Size (+/-)</label>
+              <input
+                type="number"
+                min="0.01"
+                max="100000"
+                step="any"
+                className="input"
+                value={stepValue}
+                onChange={e => setStepValue(parseFloat(e.target.value) || 1)}
+                style={{ width: '100%', padding: '5px 8px', fontSize: '0.8125rem' }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Unit</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '6px' }}>
+              {UNIT_PRESETS.map(u => (
+                <button
+                  key={u}
+                  type="button"
+                  onClick={() => setUnit(u)}
+                  style={{
+                    fontSize: '0.6875rem',
+                    fontFamily: 'var(--font-mono)',
+                    padding: '3px 8px',
+                    borderRadius: '4px',
+                    border: unit === u ? '1px solid var(--accent)' : '1px solid var(--border)',
+                    backgroundColor: unit === u ? 'var(--accent-glow)' : 'transparent',
+                    color: unit === u ? 'var(--accent)' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {u}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              maxLength={16}
+              placeholder="Or custom unit (e.g. glasses, L, reps)..."
+              className="input"
+              value={unit}
+              onChange={e => setUnit(e.target.value)}
+              style={{ width: '100%', padding: '4px 8px', fontSize: '0.75rem' }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Color Swatches */}
+      <div>
+        <label className="text-label" style={{ fontSize: '0.6875rem', marginBottom: '4px', display: 'block' }}>Colour Palette</label>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {HABIT_COLORS.map(c => {
+            const isSelected = color === c.id
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setColor(c.id)}
+                title={c.label}
+                aria-label={`Color ${c.label}`}
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: '50%',
+                  backgroundColor: `var(--habit-color-${c.id})`,
+                  border: isSelected ? '2.5px solid var(--text-primary)' : '1px solid transparent',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  outlineOffset: 2,
+                  transition: 'transform 0.15s ease',
+                  transform: isSelected ? 'scale(1.15)' : 'scale(1)',
+                }}
+              >
+                {isSelected && <Check size={12} strokeWidth={3} color="#FFFFFF" />}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Icon Picker (24 Lucide Icons) */}
+      <div>
+        <label className="text-label" style={{ fontSize: '0.6875rem', marginBottom: '4px', display: 'block' }}>Icon (Lucide)</label>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(32px, 1fr))',
+            gap: '6px',
+            maxHeight: 110,
+            overflowY: 'auto',
+            padding: '6px',
+            backgroundColor: 'var(--surface)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border)',
+          }}
+        >
+          {HABIT_ICONS.map(i => {
+            const isSelected = icon === i.id
+            return (
+              <button
+                key={i.id}
+                type="button"
+                onClick={() => setIcon(i.id)}
+                title={i.label}
+                aria-label={`Icon ${i.label}`}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '6px',
+                  border: isSelected ? '1.5px solid var(--accent)' : '1px solid var(--border)',
+                  backgroundColor: isSelected ? 'var(--accent-glow)' : 'transparent',
+                  color: isSelected ? 'var(--accent)' : 'var(--text-muted)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                {renderHabitIcon(i.id, 16)}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Sortable Habit Item ──────────────────────────────────────────────────────
 
 function SortableHabitItem({ habit, onUpdate, onArchive }: {
   habit: HabitWithSubitems
-  onUpdate: (id: string, updates: { name?: string; type?: 'checkbox' | 'checklist'; notes?: string | null }) => Promise<void>
+  onUpdate: (id: string, updates: any) => Promise<void>
   onArchive: (id: string) => Promise<void>
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: habit.id })
   const [editing, setEditing] = useState(false)
   const [name, setName] = useState(habit.name)
-  const [type, setType] = useState(habit.type)
+  const [type, setType] = useState(habit.type as 'checkbox' | 'checklist' | 'amount')
+  const [targetValue, setTargetValue] = useState(habit.target_value ?? 8)
+  const [unit, setUnit] = useState(habit.unit ?? 'glasses')
+  const [stepValue, setStepValue] = useState(habit.step_value ?? 1)
+  const [color, setColor] = useState(habit.color ?? 'sage')
+  const [icon, setIcon] = useState(habit.icon ?? 'check')
   const [expanded, setExpanded] = useState(false)
   const [newSubitem, setNewSubitem] = useState('')
   const [editingSubitem, setEditingSubitem] = useState<string | null>(null)
@@ -171,13 +388,21 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
 
   const handleSaveEdit = async () => {
     const trimmedName = name.trim()
-    const updates: { name?: string; type?: 'checkbox' | 'checklist' } = {}
+    const updates: any = {}
     if (trimmedName && trimmedName !== habit.name) {
       updates.name = trimmedName
     }
     if (type !== habit.type) {
       updates.type = type
     }
+    if (type === 'amount') {
+      updates.target_value = Number(targetValue) || 1
+      updates.unit = unit.trim() || 'units'
+      updates.step_value = Number(stepValue) || 1
+    }
+    if (color !== habit.color) updates.color = color
+    if (icon !== habit.icon) updates.icon = icon
+
     if (Object.keys(updates).length > 0) {
       await onUpdate(habit.id, updates)
     }
@@ -186,7 +411,12 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
 
   const handleCancelEdit = () => {
     setName(habit.name)
-    setType(habit.type)
+    setType(habit.type as any)
+    setTargetValue(habit.target_value ?? 8)
+    setUnit(habit.unit ?? 'glasses')
+    setStepValue(habit.step_value ?? 1)
+    setColor(habit.color ?? 'sage')
+    setIcon(habit.icon ?? 'check')
     setEditing(false)
   }
 
@@ -212,11 +442,13 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
     setEditingSubitem(null)
   }
 
+  const resolvedColor = getHabitColorVar(color)
+
   return (
     <div ref={setNodeRef} style={style}>
       <div className="card" style={{
         padding: '12px 14px',
-        marginBottom: '6px',
+        marginBottom: '8px',
         background: habit.is_archived ? 'var(--bg-surface-2)' : undefined,
         opacity: habit.is_archived ? 0.6 : 1,
       }}>
@@ -236,83 +468,132 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
             </button>
           )}
 
-          {/* Name & Type editing */}
-          {editing ? (
-            <div style={{ flex: 1, display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input
-                className="input"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') handleCancelEdit() }}
-                autoFocus
-                style={{ flex: 1, padding: '4px 8px', fontSize: '0.875rem' }}
-              />
-              <select
-                value={type}
-                onChange={e => setType(e.target.value as 'checkbox' | 'checklist')}
-                className="input"
-                style={{ width: 'auto', padding: '4px 8px', fontSize: '0.75rem' }}
-              >
-                <option value="checkbox">Checkbox</option>
-                <option value="checklist">Checklist</option>
-              </select>
-            </div>
-          ) : (
-            <span style={{
-              flex: 1, fontSize: '0.9375rem', fontWeight: 400,
-              color: habit.is_archived ? 'var(--ink-tertiary)' : 'var(--ink-primary)',
-              letterSpacing: '-0.01em',
-            }}>
-              {habit.name}
-              {habit.is_archived && <span style={{ fontSize: '0.75rem', color: 'var(--ink-tertiary)', marginLeft: '8px' }}>(Archived)</span>}
-            </span>
-          )}
+          {/* Tinted icon chip */}
+          <div
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: `color-mix(in srgb, ${getHabitColorVar(habit.color)} 15%, transparent)`,
+              color: getHabitColorVar(habit.color),
+              border: `1px solid color-mix(in srgb, ${getHabitColorVar(habit.color)} 25%, transparent)`,
+              flexShrink: 0,
+            }}
+          >
+            {renderHabitIcon(habit.icon, 15)}
+          </div>
+
+          {/* Name */}
+          <span style={{
+            flex: 1, fontSize: '0.9375rem', fontWeight: 500,
+            color: habit.is_archived ? 'var(--ink-tertiary)' : 'var(--ink-primary)',
+            letterSpacing: '-0.01em',
+          }}>
+            {habit.name}
+            {habit.is_archived && <span style={{ fontSize: '0.75rem', color: 'var(--ink-tertiary)', marginLeft: '8px' }}>(Archived)</span>}
+          </span>
 
           {/* Type badge */}
-          {!habit.is_archived && !editing && (
+          {!habit.is_archived && (
             <span style={{
               fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase',
-              color: habit.type === 'checklist' ? 'var(--accent)' : 'var(--ink-tertiary)',
+              color: habit.type === 'checklist' ? 'var(--accent)' : habit.type === 'amount' ? getHabitColorVar(habit.color) : 'var(--ink-tertiary)',
               background: habit.type === 'checklist' ? 'var(--accent-glow)' : 'var(--bg-surface-3)',
               padding: '2px 8px', borderRadius: '99px',
             }}>
-              {habit.type}
+              {habit.type === 'amount' ? `${habit.target_value ?? 1} ${habit.unit ?? ''}` : habit.type}
             </span>
           )}
 
           {/* Actions */}
           {!habit.is_archived && (
             <div style={{ display: 'flex', gap: '4px' }}>
-              {editing ? (
-                <>
-                  <button className="btn-icon" onClick={handleSaveEdit} aria-label="Save"><Check size={15} /></button>
-                  <button className="btn-icon" onClick={handleCancelEdit} aria-label="Cancel"><X size={15} /></button>
-                </>
-              ) : (
-                <>
-                  <button className="btn-icon" onClick={() => setEditing(true)} aria-label="Rename"><Pencil size={15} /></button>
-                  {habit.type === 'checklist' && (
-                    <button className="btn-icon" onClick={() => setExpanded(e => !e)} aria-label="Expand subitems">
-                      {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-                    </button>
-                  )}
-                  <button
-                    className="btn-icon"
-                    onClick={() => onArchive(habit.id)}
-                    aria-label="Archive"
-                    style={{ color: 'var(--color-danger)' }}
-                    title="Archive habit (preserves historical data)"
-                  >
-                    <Archive size={15} />
-                  </button>
-                </>
+              <button className="btn-icon" onClick={() => setEditing(true)} aria-label="Edit habit configuration"><Pencil size={15} /></button>
+              {habit.type === 'checklist' && (
+                <button className="btn-icon" onClick={() => setExpanded(e => !e)} aria-label="Expand subitems">
+                  {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </button>
               )}
+              <button
+                className="btn-icon"
+                onClick={() => onArchive(habit.id)}
+                aria-label="Archive"
+                style={{ color: 'var(--color-danger)' }}
+                title="Archive habit (preserves historical data)"
+              >
+                <Archive size={15} />
+              </button>
             </div>
           )}
         </div>
 
+        {/* Edit Habit Sheet / Centered Modal */}
+        <ResponsiveSheet
+          isOpen={editing}
+          onClose={handleCancelEdit}
+          title={`Edit Habit · ${habit.name}`}
+          description="Update habit properties, daily targets, and styling"
+        >
+          <div className="p-4 space-y-4 overflow-y-auto">
+            <input
+              className="input"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSaveEdit(); if (e.key === 'Escape') handleCancelEdit() }}
+              autoFocus
+              style={{ width: '100%', padding: '10px 12px', fontSize: '1rem' }}
+              placeholder="Habit name..."
+            />
+
+            <HabitCustomizerFields
+              type={type}
+              setType={setType}
+              targetValue={targetValue}
+              setTargetValue={setTargetValue}
+              unit={unit}
+              setUnit={setUnit}
+              stepValue={stepValue}
+              setStepValue={setStepValue}
+              color={color}
+              setColor={setColor}
+              icon={icon}
+              setIcon={setIcon}
+            />
+
+            {/* Live Preview */}
+            <div style={{ marginTop: '8px' }}>
+              <label className="text-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Live Preview</label>
+              <HabitCardView
+                variant={type}
+                title={name.trim() || 'Habit Title'}
+                subtitle={habit.notes}
+                icon={icon}
+                accentColor={color}
+                completed={false}
+                progressPct={type === 'amount' ? 50 : 0}
+                currentAmount={type === 'amount' ? Math.round((targetValue / 2) * 10) / 10 : 0}
+                targetAmount={type === 'amount' ? targetValue : null}
+                unit={type === 'amount' ? unit : null}
+                stepValue={stepValue}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
+              <button className="btn btn-primary" onClick={handleSaveEdit} aria-label="Save changes" style={{ padding: '10px 18px', minHeight: 44 }}>
+                <Check size={15} /> Save Changes
+              </button>
+              <button className="btn btn-ghost" onClick={handleCancelEdit} aria-label="Cancel editing" style={{ padding: '10px 16px', minHeight: 44 }}>
+                <X size={15} /> Cancel
+              </button>
+            </div>
+          </div>
+        </ResponsiveSheet>
+
         {/* Notes — collapsible, below name */}
-        {!habit.is_archived && (
+        {!habit.is_archived && !editing && (
           <HabitNotesSection
             habitId={habit.id}
             initialNote={habitNote}
@@ -383,7 +664,12 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
 export function HabitManager({ initialHabits }: Props) {
   const [habits, setHabits] = useState(initialHabits)
   const [newName, setNewName] = useState('')
-  const [newType, setNewType] = useState<'checkbox' | 'checklist'>('checkbox')
+  const [newType, setNewType] = useState<'checkbox' | 'checklist' | 'amount'>('checkbox')
+  const [newTarget, setNewTarget] = useState(8)
+  const [newUnit, setNewUnit] = useState('glasses')
+  const [newStep, setNewStep] = useState(1)
+  const [newColor, setNewColor] = useState('sage')
+  const [newIcon, setNewIcon] = useState('check')
   const [newNotes, setNewNotes] = useState('')
   const [showNewNotes, setShowNewNotes] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -410,23 +696,38 @@ export function HabitManager({ initialHabits }: Props) {
 
   const handleCreate = async () => {
     if (!newName.trim()) return
-    const result = await createHabitAction({
+    const payload: any = {
       name: newName.trim(),
       type: newType,
       notes: newNotes.trim() || null,
-    })
+      color: newColor,
+      icon: newIcon,
+    }
+    if (newType === 'amount') {
+      payload.target_value = Number(newTarget) || 1
+      payload.unit = newUnit.trim() || 'units'
+      payload.step_value = Number(newStep) || 1
+    }
+
+    const result = await createHabitAction(payload)
     if (result.success && result.habit) {
       setHabits(prev => [...prev, { ...result.habit!, subitems: [] }])
       setNewName('')
       setNewNotes('')
       setShowNewNotes(false)
+      setNewType('checkbox')
+      setNewTarget(8)
+      setNewUnit('glasses')
+      setNewStep(1)
+      setNewColor('sage')
+      setNewIcon('check')
       setAdding(false)
     } else if (result.error) {
       alert(`Could not create habit: ${result.error}`)
     }
   }
 
-  const handleUpdate = async (id: string, updates: { name?: string; type?: 'checkbox' | 'checklist'; notes?: string | null }) => {
+  const handleUpdate = async (id: string, updates: any) => {
     await updateHabitAction({ id, ...updates })
     setHabits(prev => prev.map(h => h.id === id ? { ...h, ...updates } : h))
   }
@@ -458,16 +759,34 @@ export function HabitManager({ initialHabits }: Props) {
 
   return (
     <div>
-      {/* Add new habit */}
+      {/* Add new habit button */}
       <div style={{ marginBottom: '20px' }}>
-        {adding ? (
-          <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <button
+          className="btn btn-ghost"
+          onClick={() => setAdding(true)}
+          style={{ width: '100%', justifyContent: 'center', padding: '12px', minHeight: 44 }}
+        >
+          <Plus size={16} /> Add Habit
+        </button>
+
+        {/* Add Habit Sheet / Dialog */}
+        <ResponsiveSheet
+          isOpen={adding}
+          onClose={() => {
+            setAdding(false)
+            setShowNewNotes(false)
+            setNewNotes('')
+          }}
+          title="Add New Habit"
+          description="Configure your habit discipline and daily target"
+        >
+          <div className="p-4 space-y-4 overflow-y-auto">
             <input
               className="input"
               value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') handleCreate(); if (e.key === 'Escape') setAdding(false) }}
-              placeholder="Habit name..."
+              placeholder="Habit name (e.g. Drink Water, Deep Work)..."
               autoFocus
             />
             {/* Notes toggle for new habit */}
@@ -478,10 +797,11 @@ export function HabitManager({ initialHabits }: Props) {
                 onChange={e => setNewNotes(e.target.value)}
                 placeholder="Optional note, context, or reminder..."
                 rows={2}
-                style={{ fontSize: '0.8125rem', fontWeight: 400, minHeight: 60, resize: 'vertical' }}
+                style={{ fontSize: '1rem', fontWeight: 400, minHeight: 60, resize: 'vertical' }}
               />
             ) : (
               <button
+                type="button"
                 onClick={() => setShowNewNotes(true)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: '5px', background: 'none', border: 'none',
@@ -492,25 +812,59 @@ export function HabitManager({ initialHabits }: Props) {
                 <StickyNote size={11} /> Add Note
               </button>
             )}
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <select
-                value={newType}
-                onChange={e => setNewType(e.target.value as 'checkbox' | 'checklist')}
-                className="input"
-                style={{ flex: 1 }}
+
+            <HabitCustomizerFields
+              type={newType}
+              setType={setNewType}
+              targetValue={newTarget}
+              setTargetValue={setNewTarget}
+              unit={newUnit}
+              setUnit={setNewUnit}
+              stepValue={newStep}
+              setStepValue={setNewStep}
+              color={newColor}
+              setColor={setNewColor}
+              icon={newIcon}
+              setIcon={setNewIcon}
+            />
+
+            {/* Live Preview */}
+            <div style={{ marginTop: '8px' }}>
+              <label className="text-label" style={{ fontSize: '0.65rem', marginBottom: '4px', display: 'block' }}>Live Preview</label>
+              <HabitCardView
+                variant={newType}
+                title={newName.trim() || 'Habit Name'}
+                subtitle={newNotes.trim() || undefined}
+                icon={newIcon}
+                accentColor={newColor}
+                completed={false}
+                progressPct={newType === 'amount' ? 50 : 0}
+                currentAmount={newType === 'amount' ? Math.round((newTarget / 2) * 10) / 10 : 0}
+                targetAmount={newType === 'amount' ? newTarget : null}
+                unit={newType === 'amount' ? newUnit : null}
+                stepValue={newStep}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '12px' }}>
+              <button className="btn btn-primary" onClick={handleCreate} aria-label="Confirm create habit" style={{ padding: '10px 18px', minHeight: 44 }}>
+                <Plus size={15} /> Create Habit
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => {
+                  setAdding(false)
+                  setShowNewNotes(false)
+                  setNewNotes('')
+                }}
+                aria-label="Cancel adding habit"
+                style={{ padding: '10px 16px', minHeight: 44 }}
               >
-                <option value="checkbox">Simple Checkbox</option>
-                <option value="checklist">Checklist (Sub-Items)</option>
-              </select>
-              <button className="btn btn-primary" onClick={handleCreate} aria-label="Confirm create habit"><Plus size={15} /> Add</button>
-              <button className="btn btn-ghost" onClick={() => { setAdding(false); setShowNewNotes(false); setNewNotes('') }} aria-label="Cancel adding habit"><X size={15} /></button>
+                <X size={15} /> Cancel
+              </button>
             </div>
           </div>
-        ) : (
-          <button className="btn btn-ghost" onClick={() => setAdding(true)} style={{ width: '100%', justifyContent: 'center', padding: '10px' }}>
-            <Plus size={16} /> Add Habit
-          </button>
-        )}
+        </ResponsiveSheet>
       </div>
 
       {/* Active habits (sortable) */}

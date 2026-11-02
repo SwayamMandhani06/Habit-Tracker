@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { createClient } from '@/lib/supabase/client'
+import { isValidTimezone } from '@/lib/date'
 import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, ArrowRight, Chrome } from 'lucide-react'
 
@@ -73,6 +74,11 @@ export default function LoginPage() {
 
     setLoading(true)
 
+    const clientTz = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (clientTz && isValidTimezone(clientTz)) {
+      document.cookie = `x-user-timezone=${encodeURIComponent(clientTz)}; path=/; max-age=31536000; SameSite=Lax`
+    }
+
     if (mode === 'login') {
       const { error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) {
@@ -88,7 +94,10 @@ export default function LoginPage() {
         password,
         options: {
           emailRedirectTo: undefined,
-          data: { full_name: name.trim() || undefined },
+          data: {
+            full_name: name.trim() || undefined,
+            timezone: clientTz && isValidTimezone(clientTz) ? clientTz : undefined,
+          },
         },
       })
       if (error) {

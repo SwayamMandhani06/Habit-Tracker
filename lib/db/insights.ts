@@ -20,6 +20,13 @@ export interface HabitInsightItem {
   id: string
   name: string
   notes: string | null
+  color?: string
+  icon?: string
+  type?: string
+  target_value?: number | null
+  unit?: string | null
+  created_at?: string
+  archived_at?: string | null
   pct: number
   lastMonthPct: number | null
   delta: number | null
@@ -549,6 +556,13 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
       id: h.id,
       name: h.name,
       notes: h.notes ?? null,
+      color: (h as any).color ?? 'sage',
+      icon: (h as any).icon ?? 'circle-dot',
+      type: (h as any).type ?? 'boolean',
+      target_value: (h as any).target_value ?? null,
+      unit: (h as any).unit ?? null,
+      created_at: h.created_at,
+      archived_at: h.archived_at,
       pct,
       lastMonthPct: lastPct !== null ? Math.round(lastPct) : null,
       delta,

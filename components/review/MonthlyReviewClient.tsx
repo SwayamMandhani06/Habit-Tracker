@@ -212,8 +212,8 @@ export function MonthlyReviewClient({ data }: Props) {
         </div>
 
         <div className="space-y-3">
-          {/* Row 1 — 3 PRIMARY STATS (larger, 2.5rem bold, 24px padding) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Row 1 — 3 PRIMARY STATS (2 across on mobile, 3 on sm+) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {/* Completion */}
             <div
               className="rounded-[8px] border flex flex-col justify-between"

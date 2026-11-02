@@ -2,7 +2,7 @@
 // actions/completion.actions.ts — Habit completion actions with strict auth & ownership verification
 import { revalidatePath } from 'next/cache'
 import { createServerClient } from '@/lib/supabase/server'
-import { toggleHabitCompletion, toggleSubitemCompletion, syncChecklistParent, toggleHabitSkip } from '@/lib/db/completions'
+import { toggleHabitCompletion, toggleSubitemCompletion, syncChecklistParent, toggleHabitSkip, setHabitAmount } from '@/lib/db/completions'
 import { getOrCreateDayEntry } from '@/lib/db/entries'
 import { z } from 'zod'
 
@@ -163,5 +163,77 @@ export async function toggleHabitSkipAction(input: z.infer<typeof toggleSkipSche
     return { success: true }
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Failed to toggle skip' }
+  }
+}
+
+import { isFutureDate } from '@/lib/date'
+import { getServerTimezone } from '@/lib/date.server'
+
+const setAmountSchema = z.object({
+  habitId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  amount: z.number().finite().min(0).max(1_000_000),
+})
+
+export async function setHabitAmountAction(input: z.infer<typeof setAmountSchema>) {
+  const supabase = await createServerClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    return { error: 'Not authenticated' }
+  }
+
+  const result = setAmountSchema.safeParse(input)
+  if (!result.success) {
+    return { error: result.error.errors[0]?.message ?? 'Invalid input' }
+  }
+
+  const { date, habitId, amount } = result.data
+
+  const userTz = await getServerTimezone()
+  if (isFutureDate(date, new Date(), userTz)) {
+    return { error: 'Date must be a valid date and not in the future' }
+  }
+
+  // Verify habit ownership and fetch habit target_value
+  const { data: habit, error: habitError } = await supabase
+    .from('habits')
+    .select('id, target_value, type')
+    .eq('id', habitId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (habitError || !habit) {
+    return { error: 'Habit not found or unauthorized' }
+  }
+
+  try {
+    const entry = await getOrCreateDayEntry(date)
+
+    // Check if completion row already exists to preserve frozen target_snapshot
+    const { data: existingRow } = await supabase
+      .from('day_habit_completions')
+      .select('id, target_snapshot')
+      .eq('day_entry_id', entry.id)
+      .eq('habit_id', habitId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    // Rule 2: target_snapshot is copied from habit when day's row is first written
+    // If existingRow already has a target_snapshot, retain it. Otherwise freeze habit.target_value.
+    const targetSnapshot =
+      existingRow?.target_snapshot !== undefined && existingRow?.target_snapshot !== null
+        ? Number(existingRow.target_snapshot)
+        : (habit.target_value != null ? Number(habit.target_value) : null)
+
+    // Rule 1: An amount habit is complete when amount >= target_snapshot
+    const isCompleted = targetSnapshot !== null ? amount >= targetSnapshot : false
+
+    await setHabitAmount(entry.id, habitId, amount, targetSnapshot, isCompleted, user.id)
+
+    revalidateCompletionPaths()
+    return { success: true, isCompleted, targetSnapshot, amount }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Failed to set habit amount' }
   }
 }

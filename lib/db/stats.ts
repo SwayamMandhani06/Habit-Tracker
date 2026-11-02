@@ -3,7 +3,7 @@ import { createServerClient } from '@/lib/supabase/server'
 import type { DashboardStats, DailyScore, HabitMonthlyStat } from '@/lib/supabase/types'
 import { CURATED_DISCIPLINE_QUOTES } from './quotes'
 import { toAppDateString, todayDate, getServerTimezone } from './entries'
-import { getMonthDateRange } from '@/lib/date'
+import { getMonthDateRange, addDays } from '@/lib/date'
 
 // Helper to detect if 'user_id' column is missing from views (e.g. legacy schema)
 function isUserIdError(err: { message?: string; code?: string } | null): boolean {
@@ -122,25 +122,20 @@ function computeStreaks(scores: DailyScore[], todayStrParam?: string): { current
   )
 
   let currentStreak = 0
-  const todayStr = todayStrParam ?? toAppDateString(new Date())
-  const checkDate = new Date(todayStr + 'T00:00:00')
+  let checkDate = todayStrParam ?? toAppDateString(new Date())
 
   // If today is neither perfect nor a rest day, start checking from yesterday
-  if (!perfectDays.has(todayStr) && !restDays.has(todayStr)) {
-    checkDate.setDate(checkDate.getDate() - 1)
+  if (!perfectDays.has(checkDate) && !restDays.has(checkDate)) {
+    checkDate = addDays(checkDate, -1)
   }
 
   while (true) {
-    const y = checkDate.getFullYear()
-    const m = String(checkDate.getMonth() + 1).padStart(2, '0')
-    const day = String(checkDate.getDate()).padStart(2, '0')
-    const dateStr = `${y}-${m}-${day}`
-    if (perfectDays.has(dateStr)) {
+    if (perfectDays.has(checkDate)) {
       currentStreak++
-      checkDate.setDate(checkDate.getDate() - 1)
-    } else if (restDays.has(dateStr)) {
+      checkDate = addDays(checkDate, -1)
+    } else if (restDays.has(checkDate)) {
       // Skipped/rest day does NOT break current streak; bridge across it
-      checkDate.setDate(checkDate.getDate() - 1)
+      checkDate = addDays(checkDate, -1)
     } else {
       break
     }
@@ -149,35 +144,30 @@ function computeStreaks(scores: DailyScore[], todayStrParam?: string): { current
   const allDates = [...new Set(sorted.map(s => s.date))].sort()
   let longestStreak = 0
   let currentRun = 0
-  let prevDate: Date | null = null
+  let prevDateStr: string | null = null
 
   for (const dateStr of allDates) {
     if (restDays.has(dateStr)) {
       // Rest day: if we are in an active streak, bridge across the rest day
-      if (prevDate) {
-        const date = new Date(dateStr + 'T00:00:00')
-        const diff = Math.round((date.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-        if (diff === 1) {
-          prevDate = date
-        }
+      if (prevDateStr && addDays(prevDateStr, 1) === dateStr) {
+        prevDateStr = dateStr
       }
       continue
     }
 
     if (!perfectDays.has(dateStr)) {
       currentRun = 0
-      prevDate = null
+      prevDateStr = null
       continue
     }
 
-    const date = new Date(dateStr + 'T00:00:00')
-    if (!prevDate) {
+    if (!prevDateStr) {
       currentRun = 1
     } else {
-      const diff = Math.round((date.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24))
-      currentRun = diff === 1 ? currentRun + 1 : 1
+      const isConsecutive = addDays(prevDateStr, 1) === dateStr
+      currentRun = isConsecutive ? currentRun + 1 : 1
     }
-    prevDate = date
+    prevDateStr = dateStr
     longestStreak = Math.max(longestStreak, currentRun)
   }
 
@@ -265,17 +255,13 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
   const DAY_INITIALS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
   const weeklySparkline: Array<{ day: string; date: string; pct: number }> = []
-  const baseDate = new Date(today + 'T00:00:00')
   for (let i = 6; i >= 0; i--) {
-    const d = new Date(baseDate)
-    d.setDate(d.getDate() - i)
-    const y = d.getFullYear()
-    const m = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const dateStr = `${y}-${m}-${day}`
+    const dateStr = addDays(today, -i)
+    const [y, m, d] = dateStr.split('-').map(Number)
+    const dayOfWeek = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
     const scoreRow = allScores.find(s => s.date === dateStr)
     weeklySparkline.push({
-      day: DAY_INITIALS[d.getDay()],
+      day: DAY_INITIALS[dayOfWeek],
       date: dateStr,
       pct: scoreRow ? Math.round(Number(scoreRow.completion_pct)) : 0,
     })

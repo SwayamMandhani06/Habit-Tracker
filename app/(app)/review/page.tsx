@@ -15,9 +15,8 @@ export default async function ReviewPage({
 }) {
   const params = await searchParams
   const today = await todayDate()
-  const d = new Date(today + 'T00:00:00')
-  const year = parseInt(params.year ?? String(d.getFullYear()), 10)
-  const month = parseInt(params.month ?? String(d.getMonth() + 1), 10)
+  const year = parseInt(params.year ?? today.slice(0, 4), 10)
+  const month = parseInt(params.month ?? today.slice(5, 7), 10)
 
   const data = await getMonthlyReviewData(year, month)
 

@@ -1,17 +1,9 @@
-// app/api/seed/route.ts — Development-only seed endpoint for the authenticated user
+// app/api/seed/route.ts — Idempotent user-scoped seed endpoint for newly authenticated users
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase/server'
 import { seedDefaultHabitsForUser } from '@/lib/db/seed'
 
 export async function POST() {
-  // Immediately block in production environment
-  if (process.env.NODE_ENV === 'production') {
-    return NextResponse.json(
-      { error: 'Forbidden: Seeding API is disabled in production' },
-      { status: 403 }
-    )
-  }
-
   const supabase = await createServerClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
 

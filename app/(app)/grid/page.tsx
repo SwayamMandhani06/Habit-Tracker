@@ -18,10 +18,9 @@ export default async function GridPage({
 }) {
   const params = await searchParams
   const today = await todayDate()
-  const todayDate_ = new Date(today + 'T00:00:00')
-  const currentYear  = todayDate_.getFullYear()
-  const currentMonth = todayDate_.getMonth() + 1
-  const year  = parseInt(params.year  ?? String(currentYear))
+  const currentYear = Number(today.slice(0, 4))
+  const currentMonth = Number(today.slice(5, 7))
+  const year = parseInt(params.year ?? String(currentYear))
   const month = parseInt(params.month ?? String(currentMonth))
 
   // Use getAllHabits (including archived) for past months so habits that were

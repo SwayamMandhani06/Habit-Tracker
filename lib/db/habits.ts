@@ -87,23 +87,53 @@ export async function getHabitSubitems(habitId: string): Promise<HabitSubitem[]>
   return (data ?? []) as HabitSubitem[]
 }
 
-// Graceful fallback if 'notes' column does not exist or schema cache not refreshed
+// Graceful fallback if 'notes' or new amount/styling columns do not exist or schema cache not refreshed
 function isNotesOrSchemaError(err: { message?: string; code?: string } | null): boolean {
   if (!err) return false
   const msg = (err.message ?? '').toLowerCase()
-  return msg.includes('notes') || msg.includes('schema') || err.code === 'PGRST204' || err.code === '42703'
+  return (
+    msg.includes('notes') ||
+    msg.includes('target_value') ||
+    msg.includes('unit') ||
+    msg.includes('step_value') ||
+    msg.includes('color') ||
+    msg.includes('icon') ||
+    msg.includes('schema') ||
+    err.code === 'PGRST204' ||
+    err.code === '42703'
+  )
+}
+
+export type CreateHabitInput = {
+  name: string
+  type: 'checkbox' | 'checklist' | 'amount'
+  notes?: string | null
+  target_value?: number | null
+  unit?: string | null
+  step_value?: number
+  color?: string
+  icon?: string
 }
 
 export async function createHabit(
-  name: string,
-  type: 'checkbox' | 'checklist',
-  notes?: string | null
+  nameOrOptions: string | CreateHabitInput,
+  maybeType?: 'checkbox' | 'checklist' | 'amount',
+  maybeNotes?: string | null
 ): Promise<Habit> {
   const supabase = await createServerClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) throw new Error('Not authenticated')
 
-  const trimmedName = name.trim()
+  const options: CreateHabitInput =
+    typeof nameOrOptions === 'string'
+      ? {
+          name: nameOrOptions,
+          type: maybeType ?? 'checkbox',
+          notes: maybeNotes,
+        }
+      : nameOrOptions
+
+  const trimmedName = options.name.trim()
   if (!trimmedName) throw new Error('Habit name cannot be empty')
   if (trimmedName.length > 100) throw new Error('Habit name cannot exceed 100 characters')
 
@@ -119,41 +149,42 @@ export async function createHabit(
   const maxRow = maxData as { sort_order: number } | null
   const nextOrder = (maxRow?.sort_order ?? 0) + 1
 
-  const basePayload: Record<string, any> = {
+  const fullPayload: Record<string, any> = {
     name: trimmedName,
-    type,
+    type: options.type,
     sort_order: nextOrder,
     is_archived: false,
     user_id: user.id, // Explicit user_id
   }
 
-  // 1. Try inserting with notes if notes were provided
-  if (notes && notes.trim()) {
-    const { data, error } = await supabase
-      .from('habits')
-      .insert({ ...basePayload, notes: notes.trim() } as any)
-      .select()
-      .single()
+  if (options.notes && options.notes.trim()) fullPayload.notes = options.notes.trim()
+  if (options.target_value !== undefined && options.target_value !== null) fullPayload.target_value = options.target_value
+  if (options.unit !== undefined && options.unit !== null) fullPayload.unit = options.unit.trim()
+  if (options.step_value !== undefined && options.step_value !== null) fullPayload.step_value = options.step_value
+  if (options.color) fullPayload.color = options.color
+  if (options.icon) fullPayload.icon = options.icon
 
-    if (!error && data) {
-      return data as Habit
-    }
-
-    if (error && !isNotesOrSchemaError(error)) {
-      throw new Error(`createHabit: ${error.message}`)
-    }
-    // If it was a notes/schema cache error, fall through to insert without notes
-  }
-
-  // 2. Insert base habit without notes (guaranteed safe on all schema versions)
+  // 1. Try inserting full payload
   let { data, error } = await supabase
     .from('habits')
-    .insert(basePayload as any)
+    .insert(fullPayload as any)
     .select()
     .single()
 
-  // 3. Fallback to selecting explicit standard columns if select() encountered cache issues
+  if (!error && data) {
+    return data as Habit
+  }
+
+  // 2. Fallback if new columns do not exist yet in DB schema
   if (error && isNotesOrSchemaError(error)) {
+    const basePayload: Record<string, any> = {
+      name: trimmedName,
+      type: options.type === 'amount' ? 'checkbox' : options.type,
+      sort_order: nextOrder,
+      is_archived: false,
+      user_id: user.id,
+    }
+
     const fallback = await supabase
       .from('habits')
       .insert(basePayload as any)
@@ -168,33 +199,51 @@ export async function createHabit(
   return data as Habit
 }
 
+export type UpdateHabitInput = {
+  name?: string
+  type?: 'checkbox' | 'checklist' | 'amount'
+  notes?: string | null
+  target_value?: number | null
+  unit?: string | null
+  step_value?: number
+  color?: string
+  icon?: string
+}
+
 export async function updateHabit(
   id: string,
-  updates: { name?: string; type?: 'checkbox' | 'checklist'; notes?: string | null }
+  updates: UpdateHabitInput
 ): Promise<void> {
   const supabase = await createServerClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (!user || authError) throw new Error('Not authenticated')
 
-  const payload: Database['public']['Tables']['habits']['Update'] = {}
+  const payload: Record<string, any> = {}
   if (updates.name) payload.name = updates.name.trim()
   if (updates.type) payload.type = updates.type
   if ('notes' in updates) payload.notes = updates.notes ?? null
+  if ('target_value' in updates) payload.target_value = updates.target_value ?? null
+  if ('unit' in updates) payload.unit = updates.unit ? updates.unit.trim() : null
+  if ('step_value' in updates && updates.step_value) payload.step_value = updates.step_value
+  if ('color' in updates && updates.color) payload.color = updates.color
+  if ('icon' in updates && updates.icon) payload.icon = updates.icon
 
   let { error } = await supabase
     .from('habits')
-    .update(payload)
+    .update(payload as any)
     .eq('id', id)
     .eq('user_id', user.id)
 
-  // Graceful fallback if 'notes' column does not exist or schema cache not refreshed
+  // Graceful fallback if new columns do not exist yet in DB schema
   if (error && isNotesOrSchemaError(error)) {
-    const fallbackPayload = { ...payload }
-    delete fallbackPayload.notes
+    const fallbackPayload: Record<string, any> = {}
+    if (updates.name) fallbackPayload.name = updates.name.trim()
+    if (updates.type && updates.type !== 'amount') fallbackPayload.type = updates.type
+
     if (Object.keys(fallbackPayload).length > 0) {
       const fallback = await supabase
         .from('habits')
-        .update(fallbackPayload)
+        .update(fallbackPayload as any)
         .eq('id', id)
         .eq('user_id', user.id)
       error = fallback.error

@@ -8,6 +8,7 @@ import { getDayCompletions, getMultiDayHabitCompletions } from '@/lib/db/complet
 import { TodayClient } from '@/components/today/TodayClient'
 import { getIsoWeek } from '@/lib/date'
 import { getWeeklyIntentionAction } from '@/actions/intention.actions'
+import { getWeekdayMon1, addDays } from '@/lib/stats/habit-math'
 
 export const metadata: Metadata = { title: '1% Better — Today' }
 
@@ -18,68 +19,104 @@ export default async function TodayPage({
 }) {
   const params = searchParams ? await searchParams : {}
   const today = await todayDate()
-  const date = params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date) ? params.date : today
+
+  // Strict server validation: real date string, not in the future
+  let date = today
+  if (params.date && /^\d{4}-\d{2}-\d{2}$/.test(params.date)) {
+    if (params.date <= today) {
+      const [y, m, d] = params.date.split('-').map(Number)
+      const checkDate = new Date(y, m - 1, d)
+      if (
+        checkDate.getFullYear() === y &&
+        checkDate.getMonth() === m - 1 &&
+        checkDate.getDate() === d
+      ) {
+        date = params.date
+      }
+    }
+  }
 
   const tz = await getServerTimezone()
-  // Calculate yesterday date in user's timezone
-  const yObj = new Date(today + 'T00:00:00')
-  yObj.setDate(yObj.getDate() - 1)
-  const yesterdayDate = toAppDateString(yObj, tz)
+
+  // Calculate yesterday date via pure addDays
+  const yesterdayDate = addDays(today, -1)
 
   // Current ISO week for intention in user's timezone
   const { year: curYear, week: curWeek } = getIsoWeek(new Date(), tz)
 
-  // Compute 5 recent days (ending on date) for the Minimal 5-day pill strip
-  const recentDays: Array<{ date: string; dayLabel: string; dayNum: string; isToday: boolean }> = []
-  const recentDates: string[] = []
-  const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const targetObj = new Date(date + 'T00:00:00')
+  // Compute 7 days of the ISO week containing the viewing date (Mon-Sun)
+  const weekday = getWeekdayMon1(date) // 1=Mon ... 7=Sun
+  const mondayStr = addDays(date, -(weekday - 1))
+  const weekDates: string[] = []
+  const weekDaysRaw: Array<{
+    date: string
+    dayLabel: string
+    dayNum: string
+    isViewing: boolean
+    isToday: boolean
+    isFuture: boolean
+  }> = []
+  const WEEK_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-  for (let i = 4; i >= 0; i--) {
-    const d = new Date(targetObj)
-    d.setDate(d.getDate() - i)
-    const dStr = toAppDateString(d, tz)
-    recentDates.push(dStr)
-    recentDays.push({
+  for (let i = 0; i < 7; i++) {
+    const dStr = addDays(mondayStr, i)
+    weekDates.push(dStr)
+    weekDaysRaw.push({
       date: dStr,
-      dayLabel: DAY_LABELS[d.getDay()],
-      dayNum: String(d.getDate()).padStart(2, '0'),
-      isToday: dStr === date,
+      dayLabel: WEEK_LABELS[i],
+      dayNum: dStr.slice(8, 10),
+      isViewing: dStr === date,
+      isToday: dStr === today,
+      isFuture: dStr > today,
     })
   }
 
-  const [habits, entry, yesterdayEntry, initialIntention, recentCompletions] = await Promise.all([
+  const [habits, entry, yesterdayEntry, initialIntention, weekCompletions] = await Promise.all([
     getHabitsWithSubitems(),
     getOrCreateDayEntry(date),
     getDayEntry(yesterdayDate),
     getWeeklyIntentionAction(curYear, curWeek),
-    getMultiDayHabitCompletions(recentDates),
+    getMultiDayHabitCompletions(weekDates),
   ])
 
-  // Check if yesterday is empty (no entry or 0 habits completed)
-  let yesterdayEmpty = false
-  if (!yesterdayEntry) {
-    yesterdayEmpty = true
-  } else {
-    const yComps = await getDayCompletions(yesterdayEntry.id)
-    const anyDone = Object.values(yComps.habitCompletions).some(Boolean)
-    if (!anyDone) yesterdayEmpty = true
-  }
+  // Compute completion % for each day in the 7-day week strip
+  const activeHabits = habits.filter((h) => !h.is_archived)
+  const totalActive = activeHabits.length
 
-  const completions = await getDayCompletions(entry.id)
+  const weekStrip = weekDaysRaw.map((wd) => {
+    const dayComps = weekCompletions[wd.date] ?? {}
+    const doneCount = Object.values(dayComps).filter(Boolean).length
+    const pct = totalActive > 0 ? Math.round((doneCount / totalActive) * 100) : 0
+    return {
+      ...wd,
+      completionPct: wd.isFuture ? 0 : pct,
+    }
+  })
+
+  // Concurrently fetch completions for current viewing entry and yesterday entry
+  const [completions, yComps] = await Promise.all([
+    getDayCompletions(entry.id),
+    yesterdayEntry ? getDayCompletions(yesterdayEntry.id) : Promise.resolve(null),
+  ])
+
+  let yesterdayEmpty = true
+  if (yComps) {
+    const anyDone = Object.values(yComps.habitCompletions).some(Boolean)
+    yesterdayEmpty = !anyDone
+  }
 
   return (
     <TodayClient
       key={date}
       date={date}
+      today={today}
       entry={entry}
       habits={habits}
       completions={completions}
+      weekStrip={weekStrip}
       yesterdayEmpty={yesterdayEmpty}
       yesterdayDate={yesterdayDate}
       initialIntention={initialIntention}
-      recentDays={recentDays}
-      recentCompletions={recentCompletions}
     />
   )
 }

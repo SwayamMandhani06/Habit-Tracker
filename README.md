@@ -91,7 +91,7 @@ habit-tracker/
 │   ├── calendar/              # CalendarView, DayEntryModal
 │   ├── dashboard/             # DashboardClient, streak cards, progress meters
 │   ├── grid/                  # MonthlyGrid with sticky header & score footer
-│   ├── homepage/              # HomePageClient, HeroPhoneMockup, StreakShowcase
+│   ├── homepage/              # HomePageClient, Hero3DScene, StreakShowcase
 │   ├── insights/              # InsightsClient with Recharts visualizations
 │   ├── nav/                   # Sidebar, BottomTabBar, ThemeToggle
 │   ├── review/                # MonthlyReviewClient
@@ -137,10 +137,11 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-APP_TIMEZONE=Asia/Kolkata
+# Timezone is automatically detected from the client browser and synced to user profile
+# Resolution order: user_metadata.timezone -> x-user-timezone cookie -> x-vercel-ip-timezone header -> UTC
 ```
 
-> **Note:** Set `APP_TIMEZONE` to your local IANA timezone (e.g. `America/New_York`, `Europe/London`, `Asia/Kolkata`). This ensures server-rendered dates match your local calendar regardless of server UTC time.
+> **Note:** Timezone is resolved dynamically per user via client detection, browser cookie, and edge headers. This ensures server-rendered dates match your local calendar anywhere in the world.
 
 ### 3. Run Database Migrations
 

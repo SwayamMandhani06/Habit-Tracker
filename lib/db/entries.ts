@@ -1,5 +1,6 @@
 // lib/db/entries.ts — Day entry CRUD (server-only)
 import { createServerClient } from '@/lib/supabase/server'
+import { getSessionUser } from '@/lib/auth/session'
 import type { DayEntry } from '@/lib/supabase/types'
 import { getTodayInServerTimezone, getServerTimezone } from '@/lib/date.server'
 import { formatDateInTz, getMonthDateRange } from '@/lib/date'
@@ -14,22 +15,21 @@ export async function todayDate(): Promise<string> {
 }
 
 /**
- * Converts any Date object to YYYY-MM-DD in the specified timezone (or user timezone / UTC).
+ * Converts any Date object to YYYY-MM-DD in the specified timezone (or UTC).
  */
 export function toAppDateString(date: Date, timezone?: string): string {
-  const envTz = process.env.APP_TIMEZONE
-  return formatDateInTz(date, timezone ?? envTz ?? 'UTC')
+  return formatDateInTz(date, timezone ?? 'UTC')
 }
 
 export async function getDayEntry(date: string, userId?: string): Promise<DayEntry | null> {
-  const supabase = await createServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return null
+  const user = await getSessionUser()
+  if (!user) return null
 
   if (userId && userId !== user.id) {
     throw new Error('Forbidden: Cannot access day entry for another user')
   }
 
+  const supabase = await createServerClient()
   const { data, error } = await supabase
     .from('day_entries')
     .select('*')
@@ -46,9 +46,10 @@ export async function getDayEntry(date: string, userId?: string): Promise<DayEnt
 export async function getOrCreateDayEntry(
   date: string
 ): Promise<DayEntry> {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const user = await getSessionUser()
   if (!user) throw new Error('Not authenticated')
+
+  const supabase = await createServerClient()
 
   // Try to get existing entry first
   const { data: existing } = await supabase

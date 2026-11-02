@@ -16,6 +16,7 @@ import {
   Grid,
   CheckSquare,
   BarChart2,
+  Plus,
 } from 'lucide-react'
 import { HabitCardView } from '@/components/habit/HabitCardView'
 import { playCompletionChime } from '@/lib/audio'
@@ -38,17 +39,15 @@ interface HabitItemState {
 }
 
 /**
- * Hero3DScene — Layered 3D Pop-Out Scene for the 1% Better Homepage Hero.
+ * Hero3DScene — High-end Layered 3D Pop-Out Scene for 1% Better.
  *
- * Architecture strictly adheres to 3D CSS preservation specifications:
- * - .stage: perspective 1800px; perspective-origin: 55% 40%; transform-style: preserve-3d;
- * - .rig: transform-style: preserve-3d; opacity: 1; rotateX/Y/Z driven by springs;
- * - <GroundShadow />: z -60, radial-gradient ellipse, no filter
- * - <PhoneFrame />: z 0, titanium bezel, screen content clipped INSIDE only
- * - <FloatChip kind="ring" />: z 40, circular progress ring + "n of 4 done"
- * - <HabitCardView /> x4: z 70, 90, 100, 130 as SIBLINGS of PhoneFrame
- * - <FloatChip kind="streak" />: z 160, flame icon + "12-day streak"
- * - All ancestors between card and .stage have transform-style: preserve-3d and zero flattening properties.
+ * Designed to match the editorial reference aesthetic:
+ * - Upright sleek iPhone frame tilted slightly in 3D (perspective 1400px, rx 7deg, ry -14deg, rz -2deg)
+ * - Rich in-screen app canvas (status bar, Today header, week strip, ambient calm backdrop)
+ * - 4 interactive habit cards popping OUT towards the left/viewer over the phone bezel (z: 60-120px)
+ * - Realistic directional drop shadows cast onto the phone screen beneath
+ * - Full interactive responsiveness (steppers, checkmark toggle, sound chimes, haptics)
+ * - Zero flattening CSS properties on any ancestor between cards and .stage
  */
 export function Hero3DScene() {
   const reducedMotion = useReducedMotion()
@@ -57,9 +56,7 @@ export function Hero3DScene() {
   const [isDesktop, setIsDesktop] = useState(false)
   const [hoveredCardId, setHoveredCardId] = useState<string | null>(null)
   const [allDoneCelebrated, setAllDoneCelebrated] = useState(false)
-  const [hasSettled, setHasSettled] = useState(false)
 
-  // Track media query for desktop vs touch/mobile
   useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)')
     setIsDesktop(mq.matches)
@@ -68,41 +65,39 @@ export function Hero3DScene() {
     return () => mq.removeEventListener('change', handler)
   }, [])
 
-  // Resting angles
-  // Desktop: rx: 14deg, ry: -26deg, rz: 6deg
-  // Mobile: reduced by 40% -> rx: 8.4deg, ry: -15.6deg, rz: 3.6deg
-  const baseRx = isDesktop ? 14 : 8.4
-  const baseRy = isDesktop ? -26 : -15.6
-  const baseRz = isDesktop ? 6 : 3.6
+  // Resting 3D angles: subtle, upright, natural tilt towards the left/viewer
+  const baseRx = isDesktop ? 7 : 4
+  const baseRy = isDesktop ? -14 : -8
+  const baseRz = isDesktop ? -2 : -1
 
-  // Mouse tilt motion values (desktop pointer devices)
+  // Mouse tilt spring values (desktop)
   const mouseTiltX = useMotionValue(0)
   const mouseTiltY = useMotionValue(0)
-  const springTiltX = useSpring(mouseTiltX, { stiffness: 140, damping: 22 })
-  const springTiltY = useSpring(mouseTiltY, { stiffness: 140, damping: 22 })
+  const springTiltX = useSpring(mouseTiltX, { stiffness: 120, damping: 20 })
+  const springTiltY = useSpring(mouseTiltY, { stiffness: 120, damping: 20 })
 
-  // Touch drag tilt motion values
+  // Touch drag tilt spring values (mobile)
   const touchTiltX = useMotionValue(0)
   const touchTiltY = useMotionValue(0)
-  const springTouchTiltX = useSpring(touchTiltX, { stiffness: 180, damping: 24 })
-  const springTouchTiltY = useSpring(touchTiltY, { stiffness: 180, damping: 24 })
+  const springTouchTiltX = useSpring(touchTiltX, { stiffness: 160, damping: 22 })
+  const springTouchTiltY = useSpring(touchTiltY, { stiffness: 160, damping: 22 })
 
   // Interactive habit states
   const [habits, setHabits] = useState<HabitItemState[]>([
     {
       id: 'water',
       variant: 'amount',
-      title: 'Drink 4L Water',
-      subtitle: 'Hydration & alertness',
+      title: 'Drink Water',
+      subtitle: 'Hydration & energy',
       icon: <Droplet size={18} strokeWidth={2.4} />,
       accentColor: '#38BDF8', // Cyan
       completed: false,
       current: 6,
       total: 8,
       unit: 'glasses',
-      targetZ: 70,
-      xOffset: -18,
-      yPos: 165,
+      targetZ: 65,
+      xOffset: -255, // pops out to the left over phone rim
+      yPos: 155,
     },
     {
       id: 'gym',
@@ -111,13 +106,13 @@ export function Hero3DScene() {
       subtitle: 'Upper body hypertrophy',
       icon: <Dumbbell size={18} strokeWidth={2.4} />,
       accentColor: '#7AA080', // Sage green
-      completed: true, // starts checked
+      completed: true,
       current: 1,
       total: 1,
       unit: 'session',
       targetZ: 90,
-      xOffset: 34,
-      yPos: 255,
+      xOffset: -248,
+      yPos: 242,
     },
     {
       id: 'deepwork',
@@ -130,9 +125,9 @@ export function Hero3DScene() {
       current: 120,
       total: 150,
       unit: 'min',
-      targetZ: 100,
-      xOffset: -6,
-      yPos: 345,
+      targetZ: 115,
+      xOffset: -258,
+      yPos: 329,
       actionLabel: '+15m',
     },
     {
@@ -146,9 +141,9 @@ export function Hero3DScene() {
       current: 7,
       total: 9,
       unit: 'steps',
-      targetZ: 130,
-      xOffset: 48,
-      yPos: 435,
+      targetZ: 135,
+      xOffset: -252,
+      yPos: 416,
       actionLabel: '+1 step',
     },
   ])
@@ -156,25 +151,15 @@ export function Hero3DScene() {
   const totalDone = habits.filter((h) => h.completed).length
   const completionPct = Math.round((totalDone / habits.length) * 100)
 
-  // Trigger celebration when all 4 habits are completed
   useEffect(() => {
     if (totalDone === habits.length && !allDoneCelebrated) {
       setAllDoneCelebrated(true)
       playCompletionChime()
-      const timer = setTimeout(() => {
-        setAllDoneCelebrated(false)
-      }, 4000)
+      const timer = setTimeout(() => setAllDoneCelebrated(false), 4000)
       return () => clearTimeout(timer)
     }
   }, [totalDone, habits.length, allDoneCelebrated])
 
-  // Mark load animation settled
-  useEffect(() => {
-    const timer = setTimeout(() => setHasSettled(true), 1200)
-    return () => clearTimeout(timer)
-  }, [])
-
-  // Pointer move handler over stage (desktop)
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!isDesktop || reducedMotion) return
@@ -182,8 +167,8 @@ export function Hero3DScene() {
       if (!rect) return
       const nx = (e.clientX - rect.left) / rect.width - 0.5
       const ny = (e.clientY - rect.top) / rect.height - 0.5
-      mouseTiltX.set(-ny * 12) // max 6deg X
-      mouseTiltY.set(nx * 16) // max 8deg Y
+      mouseTiltX.set(-ny * 10)
+      mouseTiltY.set(nx * 14)
     },
     [isDesktop, reducedMotion, mouseTiltX, mouseTiltY]
   )
@@ -194,7 +179,6 @@ export function Hero3DScene() {
     mouseTiltY.set(0)
   }, [isDesktop, mouseTiltX, mouseTiltY])
 
-  // Touch drag-to-tilt handlers (mobile)
   const touchStartRef = useRef<{ x: number; y: number } | null>(null)
   const handleTouchStart = (e: React.TouchEvent) => {
     if (isDesktop || reducedMotion) return
@@ -210,9 +194,8 @@ export function Hero3DScene() {
     if (!touch) return
     const dx = touch.clientX - touchStartRef.current.x
     const dy = touch.clientY - touchStartRef.current.y
-    // Clamp subtle tilt
-    touchTiltY.set(Math.max(-10, Math.min(10, dx * 0.15)))
-    touchTiltX.set(Math.max(-8, Math.min(8, -dy * 0.12)))
+    touchTiltY.set(Math.max(-8, Math.min(8, dx * 0.12)))
+    touchTiltX.set(Math.max(-6, Math.min(6, -dy * 0.1)))
   }
 
   const handleTouchEnd = () => {
@@ -222,8 +205,10 @@ export function Hero3DScene() {
     touchTiltY.set(0)
   }
 
-  // Card interaction handlers
   const handleToggleHabit = (id: string) => {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate?.(8)
+    }
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id !== id) return h
@@ -240,6 +225,9 @@ export function Hero3DScene() {
 
   const handleIncrement = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate?.(8)
+    }
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id !== id) return h
@@ -259,6 +247,9 @@ export function Hero3DScene() {
 
   const handleDecrement = (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate?.(8)
+    }
     setHabits((prev) =>
       prev.map((h) => {
         if (h.id !== id) return h
@@ -274,7 +265,6 @@ export function Hero3DScene() {
     )
   }
 
-  // Days of week strip
   const daysOfWeek = [
     { label: 'M', num: '26', done: true },
     { label: 'T', num: '27', done: true },
@@ -297,17 +287,17 @@ export function Hero3DScene() {
       onTouchEnd={handleTouchEnd}
       className="stage relative select-none"
       style={{
-        perspective: '1800px',
-        perspectiveOrigin: '55% 40%',
+        perspective: '1400px',
+        perspectiveOrigin: '50% 45%',
         transformStyle: 'preserve-3d',
         width: '100%',
-        maxWidth: 380,
-        height: 680,
+        maxWidth: 390,
+        height: 670,
         margin: '0 auto',
         touchAction: 'pan-y',
       }}
     >
-      {/* ── THE RIG ── */}
+      {/* ── THE 3D RIG ── */}
       <motion.div
         className="rig relative w-full h-full"
         style={{
@@ -318,7 +308,7 @@ export function Hero3DScene() {
         initial={
           reducedMotion
             ? { scale: 1, y: 0, rotateX: baseRx, rotateY: baseRy, rotateZ: baseRz }
-            : { scale: 0.94, y: 24, rotateX: baseRx, rotateY: baseRy, rotateZ: baseRz }
+            : { scale: 0.95, y: 20, rotateX: baseRx, rotateY: baseRy, rotateZ: baseRz }
         }
         animate={
           reducedMotion
@@ -338,27 +328,27 @@ export function Hero3DScene() {
               }
         }
       >
-        {/* ── 1. GROUND SHADOW (z: -60, radial-gradient ellipse, no filter) ── */}
+        {/* ── 1. GROUND SHADOW (z: -50) ── */}
         <div
           aria-hidden="true"
           className="absolute pointer-events-none"
           style={{
             transformStyle: 'preserve-3d',
-            transform: 'translateX(-50%) translateZ(-60px) rotateX(90deg)',
+            transform: 'translateX(-50%) translateZ(-50px) rotateX(90deg)',
             left: '50%',
-            bottom: -35,
-            width: 360,
-            height: 110,
+            bottom: -30,
+            width: 350,
+            height: 100,
             borderRadius: '50%',
             background:
-              'radial-gradient(ellipse 65% 50% at 50% 50%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.22) 42%, transparent 74%)',
+              'radial-gradient(ellipse 65% 50% at 50% 50%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 45%, transparent 75%)',
             zIndex: 0,
           }}
         />
 
-        {/* ── 2. PHONE FRAME (z: 0; screen content clipped INSIDE only) ── */}
+        {/* ── 2. PHONE CHASSIS (z: 0) ── */}
         <div
-          className="absolute left-1/2 -translate-x-1/2 rounded-[46px] p-2.5 transition-shadow duration-500"
+          className="absolute left-1/2 rounded-[46px] p-2.5 transition-shadow duration-500"
           style={{
             transformStyle: 'preserve-3d',
             transform: 'translateX(-50%) translateZ(0px)',
@@ -366,12 +356,12 @@ export function Hero3DScene() {
             height: 648,
             backgroundColor: '#1E1D1A', // Deep titanium bezel
             boxShadow: allDoneCelebrated
-              ? '0 0 0 2px var(--accent), 0 35px 70px -15px rgba(0, 0, 0, 0.7), 0 0 45px rgba(122, 160, 128, 0.45)'
+              ? '0 0 0 2px var(--accent), 0 32px 64px -14px rgba(0, 0, 0, 0.7), 0 0 45px rgba(122, 160, 128, 0.45)'
               : '0 28px 60px -15px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.2)',
             zIndex: 10,
           }}
         >
-          {/* Screen Container — overflow-hidden is clipped INSIDE this element only */}
+          {/* Screen Container — overflow-hidden clipped INSIDE screen only */}
           <div
             className="relative w-full h-full rounded-[38px] overflow-hidden flex flex-col bg-[var(--surface)] text-[var(--text-primary)] border border-black/30 dark:border-white/10"
             style={{
@@ -380,7 +370,7 @@ export function Hero3DScene() {
               backgroundSize: '18px 18px',
             }}
           >
-            {/* Dynamic Island Cutout */}
+            {/* Dynamic Island */}
             <div
               aria-hidden="true"
               className="absolute top-2.5 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-40 flex items-center justify-between px-2.5 pointer-events-none"
@@ -393,7 +383,7 @@ export function Hero3DScene() {
               />
             </div>
 
-            {/* iOS Status Bar */}
+            {/* Status Bar */}
             <div
               aria-hidden="true"
               className="pt-3.5 px-6 pb-1 flex items-center justify-between font-mono text-[11px] font-bold select-none z-30 opacity-90"
@@ -447,18 +437,55 @@ export function Hero3DScene() {
               </div>
             </div>
 
-            {/* Phone Screen Canvas: Background guides where floating cards pop out */}
-            <div className="flex-1 px-4 pt-3 space-y-3 relative opacity-20 pointer-events-none">
-              <div className="h-[68px] rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-raised)]" />
-              <div className="h-[68px] rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-raised)]" />
-              <div className="h-[68px] rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-raised)]" />
-              <div className="h-[68px] rounded-2xl border border-dashed border-[var(--border)] bg-[var(--surface-raised)]" />
+            {/* Filter Pills row */}
+            <div className="px-3.5 py-1 flex items-center justify-center gap-1.5 border-b border-[var(--border)]/40 text-[9px] font-mono">
+              <span className="px-2 py-0.5 rounded-full text-[var(--text-muted)]">Morning</span>
+              <span className="px-2.5 py-0.5 rounded-full bg-[var(--surface-raised)] text-[var(--text-primary)] font-semibold border border-[var(--border)]">
+                All Day
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[var(--text-muted)]">Evening</span>
             </div>
 
-            {/* In-Phone Bottom Navigation Bar */}
+            {/* In-Screen Habit Canvas (Rich background slots underlying the 3D pop-outs) */}
+            <div className="flex-1 px-3.5 pt-2.5 space-y-2.5 relative opacity-35 pointer-events-none">
+              {habits.map((h) => (
+                <div
+                  key={h.id}
+                  className="h-[64px] rounded-xl border border-[var(--border)] bg-[var(--surface-raised)]/80 px-3 flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs"
+                      style={{ backgroundColor: h.accentColor }}
+                    >
+                      {h.completed ? <Check size={14} strokeWidth={3} /> : '·'}
+                    </div>
+                    <div>
+                      <div className="font-mono text-xs font-semibold text-[var(--text-primary)]">
+                        {h.title}
+                      </div>
+                      <div className="font-mono text-[10px] text-[var(--text-muted)]">
+                        {h.subtitle}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="w-12 h-1.5 rounded-full bg-[var(--border)] overflow-hidden">
+                    <div
+                      className="h-full rounded-full"
+                      style={{
+                        width: `${h.total > 0 ? (h.current / h.total) * 100 : 0}%`,
+                        backgroundColor: h.accentColor,
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* In-Phone Bottom Navigation Bar with Center Floating '+' Button */}
             <div
               aria-hidden="true"
-              className="px-6 py-2 border-t border-[var(--border)] bg-[var(--surface)] flex items-center justify-between text-[var(--text-muted)] text-[10px] font-mono"
+              className="relative px-5 py-2.5 border-t border-[var(--border)] bg-[var(--surface)] flex items-center justify-between text-[var(--text-muted)] text-[10px] font-mono"
             >
               <div className="flex flex-col items-center text-[var(--accent)] font-bold">
                 <CheckSquare size={14} />
@@ -467,6 +494,10 @@ export function Hero3DScene() {
               <div className="flex flex-col items-center">
                 <Grid size={14} />
                 <span className="mt-0.5">Grid</span>
+              </div>
+              {/* Floating Center '+' Button */}
+              <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-md -mt-3 border-2 border-[var(--surface)]">
+                <Plus size={16} strokeWidth={2.5} />
               </div>
               <div className="flex flex-col items-center">
                 <Calendar size={14} />
@@ -480,39 +511,28 @@ export function Hero3DScene() {
           </div>
         </div>
 
-        {/* ── 3. FLOAT CHIP: RING (z: 40, overlaps phone's top-right edge) ── */}
-        <motion.div
+        {/* ── 3. FLOAT CHIP: RING (z: 50, top-right edge) ── */}
+        <div
           className="absolute pointer-events-none"
           style={{
             transformStyle: 'preserve-3d',
-            transform: 'translateZ(40px)',
-            top: 36,
-            right: 0,
-            zIndex: 40,
+            transform: 'translateZ(50px)',
+            top: 26,
+            right: 4,
+            zIndex: 50,
           }}
-          initial={reducedMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.2, duration: 0.4 }}
         >
           <div
-            className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border shadow-xl"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-xl backdrop-blur-md"
             style={{
               backgroundColor: 'var(--surface-raised)',
               borderColor: 'var(--border)',
               color: 'var(--text-primary)',
             }}
           >
-            {/* Circular SVG Ring */}
-            <div className="relative w-6 h-6 flex items-center justify-center">
+            <div className="relative w-5 h-5 flex items-center justify-center">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 32 32">
-                <circle
-                  cx="16"
-                  cy="16"
-                  r="12"
-                  fill="none"
-                  stroke="var(--border)"
-                  strokeWidth="3"
-                />
+                <circle cx="16" cy="16" r="12" fill="none" stroke="var(--border)" strokeWidth="3" />
                 <circle
                   cx="16"
                   cy="16"
@@ -527,94 +547,85 @@ export function Hero3DScene() {
                 />
               </svg>
             </div>
-            <div className="font-mono text-[11px] leading-tight pr-1">
-              <span className="font-bold block text-[var(--accent)]">{completionPct}%</span>
-              <span className="text-[9.5px] text-[var(--text-muted)]">
-                {totalDone} of 4 done
+            <div className="font-mono text-[10px] leading-tight pr-0.5">
+              <span className="font-bold text-[var(--accent)]">{completionPct}%</span>
+              <span className="text-[9px] text-[var(--text-muted)] ml-1">
+                {totalDone}/4
               </span>
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        {/* ── 4. FOUR FLOATING HABIT CARDS (z: 70, 90, 100, 130) ── */}
-        {habits.map((habit, index) => {
+        {/* ── 4. FOUR FLOATING 3D POP-OUT CARDS (z: 65, 90, 115, 135) ── */}
+        {habits.map((habit) => {
           const isHovered = hoveredCardId === habit.id
-          const currentZ = isHovered ? habit.targetZ + 40 : habit.targetZ
+          const currentZ = isHovered ? habit.targetZ + 35 : habit.targetZ
           const progressPct =
             habit.total > 0 ? Math.round((habit.current / habit.total) * 100) : 0
+          const actualX = isDesktop ? habit.xOffset : -166
 
           return (
-            <motion.div
+            <div
               key={habit.id}
-              className="absolute left-1/2"
+              className="absolute left-1/2 cursor-pointer"
               onMouseEnter={() => setHoveredCardId(habit.id)}
               onMouseLeave={() => setHoveredCardId(null)}
               style={{
                 transformStyle: 'preserve-3d',
-                transform: `translateX(calc(-50% + ${habit.xOffset}px)) translateZ(${currentZ}px)`,
+                transform: `translateX(${actualX}px) translateZ(${currentZ}px) scale(${isHovered ? 1.025 : 1})`,
                 top: habit.yPos,
-                width: 290,
-                zIndex: habit.targetZ,
-                transition: 'transform 0.25s cubic-bezier(0.22, 1, 0.36, 1)',
-              }}
-              initial={
-                reducedMotion
-                  ? { opacity: 1, y: 0 }
-                  : { opacity: 0, y: 16 }
-              }
-              animate={{
-                opacity: 1,
-                y: 0,
-                scale: isHovered ? 1.03 : 1,
-                transition: {
-                  delay: reducedMotion ? 0 : 0.2 + index * 0.12,
-                  type: 'spring',
-                  stiffness: 140,
-                  damping: 18,
-                },
+                width: 312,
+                zIndex: habit.targetZ + 30,
+                transition: 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
-              <HabitCardView
-                variant={habit.variant}
-                title={habit.title}
-                subtitle={habit.subtitle}
-                icon={habit.icon}
-                accentColor={habit.accentColor}
-                completed={habit.completed}
-                progressPct={progressPct}
-                valueDisplay={
-                  habit.variant === 'amount'
-                    ? `${habit.current}/${habit.total}`
-                    : habit.variant === 'progress'
-                    ? `${habit.current}/${habit.total} ${habit.unit}`
-                    : undefined
-                }
-                actionLabel={habit.actionLabel}
-                onToggle={() => handleToggleHabit(habit.id)}
-                onIncrement={(e) => handleIncrement(habit.id, e)}
-                onDecrement={(e) => handleDecrement(habit.id, e)}
-                isHovered={isHovered}
-              />
-            </motion.div>
+              <div
+                style={{
+                  filter: 'drop-shadow(6px 14px 20px rgba(0,0,0,0.52)) drop-shadow(0 2px 5px rgba(0,0,0,0.25))',
+                }}
+              >
+                <HabitCardView
+                  variant={habit.variant}
+                  title={habit.title}
+                  subtitle={habit.subtitle}
+                  icon={habit.icon}
+                  accentColor={habit.accentColor}
+                  completed={habit.completed}
+                  progressPct={progressPct}
+                  valueDisplay={
+                    habit.variant === 'amount'
+                      ? `${habit.current}/${habit.total}`
+                      : habit.variant === 'progress'
+                      ? `${habit.current}/${habit.total} ${habit.unit}`
+                      : undefined
+                  }
+                  currentAmount={habit.current}
+                  targetAmount={habit.total}
+                  unit={habit.unit}
+                  actionLabel={habit.actionLabel}
+                  onToggle={() => handleToggleHabit(habit.id)}
+                  onIncrement={(e) => handleIncrement(habit.id, e)}
+                  onDecrement={(e) => handleDecrement(habit.id, e)}
+                  isHovered={isHovered}
+                />
+              </div>
+            </div>
           )
         })}
 
-        {/* ── 5. FLOAT CHIP: STREAK (z: 160, flame icon + "12-day streak") ── */}
-        <motion.div
+        {/* ── 5. FLOAT CHIP: STREAK (z: 140, bottom-left edge) ── */}
+        <div
           className="absolute pointer-events-none"
           style={{
             transformStyle: 'preserve-3d',
-            transform: 'translateZ(160px)',
-            bottom: 70,
-            left: -12,
-            zIndex: 160,
+            transform: 'translateZ(140px)',
+            bottom: 55,
+            left: isDesktop ? -16 : 6,
+            zIndex: 140,
           }}
-          initial={reducedMotion ? { opacity: 1, scale: 1 } : { opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.65, duration: 0.4 }}
         >
           <div
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-2xl"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-2xl backdrop-blur-md"
             style={{
               backgroundColor: 'var(--surface-raised)',
               borderColor: 'var(--border)',
@@ -624,30 +635,30 @@ export function Hero3DScene() {
             <Flame size={14} className="text-amber-500 fill-amber-500 animate-pulse" />
             <span className="font-mono text-[11px] font-bold">12-day streak</span>
           </div>
-        </motion.div>
+        </div>
 
-        {/* ── 6. ALL DONE CELEBRATION CHIP (z: 160, rises in when 4/4 habits done) ── */}
+        {/* ── 6. ALL DONE CELEBRATION CHIP (z: 160) ── */}
         {allDoneCelebrated && (
           <motion.div
             className="absolute left-1/2 pointer-events-none"
             style={{
               transformStyle: 'preserve-3d',
               transform: 'translateX(-50%) translateZ(160px)',
-              top: 290,
+              top: 285,
               zIndex: 160,
             }}
             initial={{ opacity: 0, y: 20, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1.08 }}
+            animate={{ opacity: 1, y: 0, scale: 1.06 }}
             exit={{ opacity: 0, y: -10, scale: 0.9 }}
             transition={{ type: 'spring', stiffness: 220, damping: 16 }}
           >
             <div
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full border shadow-2xl backdrop-blur-sm"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full border shadow-2xl backdrop-blur-md"
               style={{
                 backgroundColor: 'var(--surface-raised)',
                 borderColor: 'var(--accent)',
                 color: 'var(--accent)',
-                boxShadow: '0 20px 40px rgba(0,0,0,0.4), 0 0 25px rgba(122,160,128,0.4)',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.45), 0 0 25px rgba(122,160,128,0.4)',
               }}
             >
               <Sparkles size={16} className="text-amber-400 fill-amber-400" />
@@ -661,4 +672,3 @@ export function Hero3DScene() {
     </div>
   )
 }
-

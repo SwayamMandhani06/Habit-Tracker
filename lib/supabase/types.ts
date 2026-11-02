@@ -4,7 +4,8 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
-export type HabitType = 'checkbox' | 'checklist'
+export type HabitType = 'checkbox' | 'checklist' | 'amount'
+export type HabitColor = 'sage' | 'clay' | 'sky' | 'amber' | 'plum' | 'rose' | 'slate' | 'teal'
 
 // ── Row types (returned by SELECT) ───────────────────────────────────────────
 export type Habit = {
@@ -15,6 +16,11 @@ export type Habit = {
   is_archived: boolean
   archived_at: string | null
   notes: string | null
+  target_value?: number | null
+  unit?: string | null
+  step_value?: number
+  color?: HabitColor | string
+  icon?: string
   user_id: string | null
   created_at: string
 }
@@ -48,6 +54,8 @@ export type DayHabitCompletion = {
   habit_id: string
   is_completed: boolean
   is_skipped: boolean
+  amount?: number
+  target_snapshot?: number | null
   user_id: string | null
 }
 
@@ -59,6 +67,30 @@ export type WeeklyIntention = {
   intention: string
   created_at: string
   updated_at: string
+}
+
+export type HabitDayNote = {
+  id: string
+  user_id: string
+  habit_id: string
+  date: string
+  note: string
+  created_at: string
+  updated_at: string
+}
+
+export type FocusSession = {
+  id: string
+  user_id: string
+  habit_id: string | null
+  started_at: string
+  ended_at: string
+  duration_seconds: number
+  planned_seconds: number | null
+  mode: 'countdown' | 'pomodoro'
+  local_date: string
+  habit_minutes_applied: number
+  created_at: string
 }
 
 export type DaySubitemCompletion = {
@@ -141,6 +173,11 @@ export type Database = {
           is_archived?: boolean
           archived_at?: string | null
           notes?: string | null
+          target_value?: number | null
+          unit?: string | null
+          step_value?: number
+          color?: HabitColor | string
+          icon?: string
           user_id?: string | null
           created_at?: string
         }
@@ -152,6 +189,11 @@ export type Database = {
           is_archived?: boolean
           archived_at?: string | null
           notes?: string | null
+          target_value?: number | null
+          unit?: string | null
+          step_value?: number
+          color?: HabitColor | string
+          icon?: string
           user_id?: string | null
           created_at?: string
         }
@@ -223,6 +265,8 @@ export type Database = {
           habit_id: string
           is_completed?: boolean
           is_skipped?: boolean
+          amount?: number
+          target_snapshot?: number | null
           user_id?: string | null
         }
         Update: {
@@ -231,6 +275,8 @@ export type Database = {
           habit_id?: string
           is_completed?: boolean
           is_skipped?: boolean
+          amount?: number
+          target_snapshot?: number | null
           user_id?: string | null
         }
         Relationships: [
@@ -400,6 +446,74 @@ export type Database = {
           }
         ]
       }
+      habit_day_notes: {
+        Row: HabitDayNote
+        Insert: {
+          id?: string
+          user_id?: string
+          habit_id: string
+          date: string
+          note: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          habit_id?: string
+          date?: string
+          note?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'habit_day_notes_habit_id_fkey'
+            columns: ['habit_id']
+            isOneToOne: false
+            referencedRelation: 'habits'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      focus_sessions: {
+        Row: FocusSession
+        Insert: {
+          id: string
+          user_id?: string
+          habit_id?: string | null
+          started_at: string
+          ended_at: string
+          duration_seconds: number
+          planned_seconds?: number | null
+          mode: 'countdown' | 'pomodoro'
+          local_date: string
+          habit_minutes_applied?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          habit_id?: string | null
+          started_at?: string
+          ended_at?: string
+          duration_seconds?: number
+          planned_seconds?: number | null
+          mode?: 'countdown' | 'pomodoro'
+          local_date?: string
+          habit_minutes_applied?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'focus_sessions_habit_id_fkey'
+            columns: ['habit_id']
+            isOneToOne: false
+            referencedRelation: 'habits'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: {
       daily_scores: {
@@ -426,6 +540,8 @@ export type DayCompletionState = {
   habitCompletions: Record<string, boolean>   // habit_id → is_completed
   subitemCompletions: Record<string, boolean> // subitem_id → is_completed
   habitSkips?: Record<string, boolean>        // habit_id → is_skipped
+  habitAmounts?: Record<string, number>       // habit_id → amount
+  habitTargets?: Record<string, number | null> // habit_id → target_snapshot
 }
 
 export type DashboardStats = {
