@@ -18,15 +18,19 @@ create table if not exists weekly_intentions (
 
 alter table weekly_intentions enable row level security;
 
+drop policy if exists "weekly_intentions: users can select own" on weekly_intentions;
 create policy "weekly_intentions: users can select own"
   on weekly_intentions for select using (auth.uid() = user_id);
 
+drop policy if exists "weekly_intentions: users can insert own" on weekly_intentions;
 create policy "weekly_intentions: users can insert own"
   on weekly_intentions for insert with check (auth.uid() = user_id);
 
+drop policy if exists "weekly_intentions: users can update own" on weekly_intentions;
 create policy "weekly_intentions: users can update own"
   on weekly_intentions for update using (auth.uid() = user_id);
 
+drop policy if exists "weekly_intentions: users can delete own" on weekly_intentions;
 create policy "weekly_intentions: users can delete own"
   on weekly_intentions for delete using (auth.uid() = user_id);
 
