@@ -1,5 +1,5 @@
 // public/sw.js — 1% Better Habit Tracker Service Worker
-const BUILD_ID = 'build_1793789844709'
+const BUILD_ID = 'build_1793790484229'
 const CACHE_NAME = `habit-static-${BUILD_ID}`
 
 const STATIC_ASSETS = [

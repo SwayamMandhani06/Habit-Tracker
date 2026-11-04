@@ -86,9 +86,9 @@ export function Hero3DScene() {
   const [habits, setHabits] = useState<HabitItemState[]>([
     {
       id: 'water',
-      variant: 'amount',
+      variant: 'progress',
       title: 'Drink Water',
-      subtitle: 'Hydration & energy',
+      subtitle: 'Daily hydration',
       icon: <Droplet size={18} strokeWidth={2.4} />,
       accentColor: '#38BDF8', // Cyan
       completed: false,
@@ -97,7 +97,8 @@ export function Hero3DScene() {
       unit: 'glasses',
       targetZ: 65,
       xOffset: -255, // pops out to the left over phone rim
-      yPos: 128,
+      yPos: 155,
+      actionLabel: '+1',
     },
     {
       id: 'gym',
@@ -112,13 +113,13 @@ export function Hero3DScene() {
       unit: 'session',
       targetZ: 90,
       xOffset: -248,
-      yPos: 246,
+      yPos: 245,
     },
     {
       id: 'deepwork',
       variant: 'progress',
       title: 'Deep Work',
-      subtitle: 'Focused engineering block',
+      subtitle: 'Deep focus block',
       icon: <Zap size={18} strokeWidth={2.4} />,
       accentColor: '#F59E0B', // Warm Amber
       completed: false,
@@ -127,14 +128,14 @@ export function Hero3DScene() {
       unit: 'min',
       targetZ: 115,
       xOffset: -258,
-      yPos: 328,
+      yPos: 335,
       actionLabel: '+15m',
     },
     {
       id: 'morning',
       variant: 'progress',
       title: 'Morning Routine',
-      subtitle: 'Cold wash, journal & plan',
+      subtitle: 'Cold wash & plan',
       icon: <Sunrise size={18} strokeWidth={2.4} />,
       accentColor: '#818CF8', // Indigo
       completed: false,
@@ -143,7 +144,7 @@ export function Hero3DScene() {
       unit: 'steps',
       targetZ: 135,
       xOffset: -252,
-      yPos: 410,
+      yPos: 425,
       actionLabel: '+1 step',
     },
   ])
@@ -612,7 +613,6 @@ export function Hero3DScene() {
                   targetAmount={habit.total}
                   unit={habit.unit}
                   actionLabel={habit.actionLabel}
-                  forceTwoRow={habit.variant === 'amount'}
                   onToggle={() => handleToggleHabit(habit.id)}
                   onIncrement={(e) => handleIncrement(habit.id, e)}
                   onDecrement={(e) => handleDecrement(habit.id, e)}
