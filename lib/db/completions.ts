@@ -20,7 +20,16 @@ type HabitCompRow = {
 }
 type SubitemCompRow = { subitem_id: string; is_completed: boolean }
 
-export async function getDayCompletions(dayEntryId: string): Promise<DayCompletionState> {
+export async function getDayCompletions(dayEntryId?: string | null): Promise<DayCompletionState> {
+  if (!dayEntryId) {
+    return {
+      habitCompletions: {},
+      subitemCompletions: {},
+      habitSkips: {},
+      habitAmounts: {},
+      habitTargets: {},
+    }
+  }
   const client = await db()
   const userId = await getAuthenticatedUserId(client)
   let habitComps: HabitCompRow[] = []

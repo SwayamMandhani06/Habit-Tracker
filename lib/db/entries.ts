@@ -51,36 +51,31 @@ export async function getOrCreateDayEntry(
 
   const supabase = await createServerClient()
 
-  // Try to get existing entry first
+  // 1. Check for existing row
   const { data: existing } = await supabase
     .from('day_entries')
     .select('*')
     .eq('date', date)
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   if (existing) return existing as DayEntry
 
-  // Create new entry if none exists
+  // 2. Insert with ignoreDuplicates: true (ON CONFLICT DO NOTHING — does not fire update_updated_at trigger on existing)
+  await supabase
+    .from('day_entries')
+    .upsert({ date, user_id: user.id }, { onConflict: 'user_id,date', ignoreDuplicates: true })
+
+  // 3. Select the created or concurrently inserted row
   const { data: created, error } = await supabase
     .from('day_entries')
-    .insert({ date, user_id: user.id })
-    .select()
-    .single()
+    .select('*')
+    .eq('date', date)
+    .eq('user_id', user.id)
+    .maybeSingle()
 
-  if (error) {
-    // Handle race condition — another request may have 
-    // inserted between our select and insert
-    if (error.code === '23505') {
-      const { data: raceExisting } = await supabase
-        .from('day_entries')
-        .select('*')
-        .eq('date', date)
-        .eq('user_id', user.id)
-        .single()
-      if (raceExisting) return raceExisting as DayEntry
-    }
-    throw new Error(`getOrCreateDayEntry: ${error.message}`)
+  if (error || !created) {
+    throw new Error(`getOrCreateDayEntry: ${error?.message || 'Failed to select day entry'}`)
   }
 
   return created as DayEntry

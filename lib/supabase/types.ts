@@ -525,7 +525,45 @@ export type Database = {
         Relationships: []
       }
     }
-    Functions: Record<string, never>
+    Functions: {
+      seed_default_data: {
+        Args: Record<string, never>
+        Returns: {
+          seeded: boolean
+          reason?: string
+          habits_count?: number
+          subitems_count?: number
+          quotes_count?: number
+          user_id?: string
+        }
+      }
+      log_focus_session: {
+        Args: {
+          p_habit_id?: string | null
+          p_started_at: string
+          p_ended_at: string
+          p_duration_seconds: number
+          p_planned_seconds: number
+          p_mode: string
+          p_local_date: string
+        }
+        Returns: {
+          session_id: string
+          applied_minutes: number
+          total_minutes: number
+          is_completed: boolean
+        }
+      }
+      delete_focus_session: {
+        Args: {
+          p_session_id: string
+        }
+        Returns: {
+          deleted: boolean
+          reverted_minutes: number
+        }
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

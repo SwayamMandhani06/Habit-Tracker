@@ -34,41 +34,63 @@ export async function getAllHabits(): Promise<Habit[]> {
   return (data ?? []) as Habit[]
 }
 
-export async function getHabitsWithSubitems(): Promise<HabitWithSubitems[]> {
-  const supabase = await createServerClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return []
+export async function getHabitsWithSubitems(
+  providedClient?: any,
+  providedUserId?: string
+): Promise<HabitWithSubitems[]> {
+  const supabase = providedClient || (await createServerClient())
+  let userId = providedUserId
+  if (!userId) {
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return []
+    userId = user.id
+  }
 
+  // Embed sub-items with habits in one single select query
   const { data: habits, error: hErr } = await supabase
     .from('habits')
-    .select('*')
-    .eq('user_id', user.id)
+    .select('*, habit_subitems(*)')
+    .eq('user_id', userId)
     .eq('is_archived', false)
     .order('sort_order', { ascending: true })
 
-  if (hErr) throw new Error(`getHabitsWithSubitems habits: ${hErr.message}`)
-
-  let habitList = (habits ?? []) as Habit[]
-
-  const habitIds = habitList.filter(h => h.type === 'checklist').map(h => h.id)
-  let subitems: HabitSubitem[] = []
-
-  if (habitIds.length > 0) {
-    const { data, error: sErr } = await supabase
-      .from('habit_subitems')
+  if (hErr) {
+    // Graceful fallback if embedded relation is temporarily unindexed by PostgREST schema cache
+    const { data: rawHabits, error: rawErr } = await supabase
+      .from('habits')
       .select('*')
-      .eq('user_id', user.id)
-      .in('habit_id', habitIds)
+      .eq('user_id', userId)
+      .eq('is_archived', false)
       .order('sort_order', { ascending: true })
 
-    if (sErr) throw new Error(`getHabitsWithSubitems subitems: ${sErr.message}`)
-    subitems = (data ?? []) as HabitSubitem[]
+    if (rawErr) throw new Error(`getHabitsWithSubitems habits: ${rawErr.message}`)
+    const habitList = (rawHabits ?? []) as Habit[]
+    const habitIds = habitList.filter((h) => h.type === 'checklist').map((h) => h.id)
+    let subitems: HabitSubitem[] = []
+    if (habitIds.length > 0) {
+      const { data: subData } = await supabase
+        .from('habit_subitems')
+        .select('*')
+        .eq('user_id', userId)
+        .in('habit_id', habitIds)
+        .order('sort_order', { ascending: true })
+      subitems = (subData ?? []) as HabitSubitem[]
+    }
+    return habitList.map((h) => ({
+      ...h,
+      subitems: subitems.filter((s) => s.habit_id === h.id),
+    }))
   }
 
-  return habitList.map(h => ({
-    ...h,
-    subitems: subitems.filter(s => s.habit_id === h.id),
-  }))
+  return ((habits ?? []) as any[]).map((h) => {
+    const rawSubitems = (h.habit_subitems ?? []) as HabitSubitem[]
+    const sortedSubitems = [...rawSubitems].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+    const { habit_subitems, ...rest } = h
+    return {
+      ...rest,
+      subitems: sortedSubitems,
+    } as HabitWithSubitems
+  })
 }
 
 export async function getHabitSubitems(habitId: string): Promise<HabitSubitem[]> {

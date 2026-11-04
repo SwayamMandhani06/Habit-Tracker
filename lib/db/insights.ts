@@ -3,6 +3,16 @@ import { createServerClient } from '@/lib/supabase/server'
 import { toAppDateString, todayDate } from './entries'
 import { getMonthDateRange } from '@/lib/date'
 import type { Habit, MonthReview } from '@/lib/supabase/types'
+import {
+  computeDailyScore,
+  computeStreaks,
+  isHabitActiveOnDate,
+  calculateHabitStreaks,
+  type DayScoreResult,
+  type HabitRecord,
+} from '@/lib/scoring'
+import { getDailyScoresForMonth, getAllDailyScoresForCalendar, getHabitMonthlyStats } from './stats'
+import { timeStep } from '@/lib/timing'
 
 export interface DailyPoint {
   day: number
@@ -145,96 +155,39 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
   const priorMonth = month === 1 ? 12 : month - 1
   const priorYear = month === 1 ? year - 1 : year
 
-  // Run database queries in parallel — strictly scoped to authenticated user
+  // Run database queries in parallel using raw tables and pure lib/scoring (NO views)
   const [
     habitsRes,
     monthEntriesRes,
-    dailyScoresRes,
-    allScoresRes,
-    thisMonthStatsRes,
-    priorMonthStatsRes,
+    dailyScoresData,
+    allScoresData,
+    thisMonthStatsData,
+    priorMonthStatsData,
   ] = await Promise.all([
-    db.from('habits').select('*').eq('user_id', userId).order('sort_order', { ascending: true }),
-    db.from('day_entries')
-      .select('id, date, sleep_hours, day_habit_completions(habit_id, is_completed, is_skipped)')
-      .eq('user_id', userId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true }),
-    db.from('daily_scores')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true }),
-    db.from('daily_scores')
-      .select('date, completion_pct, total_active_habits, completed_habits, skipped_habits')
-      .eq('user_id', userId)
-      .order('date', { ascending: false }),
-    db.from('habit_monthly_stats')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('year', year)
-      .eq('month', month),
-    db.from('habit_monthly_stats')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('year', priorYear)
-      .eq('month', priorMonth),
+    timeStep('/insights', 'query_habits', () =>
+      db.from('habits').select('*').eq('user_id', userId).order('sort_order', { ascending: true })
+    ),
+    timeStep('/insights', 'query_month_entries', () =>
+      db.from('day_entries')
+        .select('id, date, sleep_hours, day_habit_completions(habit_id, is_completed, is_skipped)')
+        .eq('user_id', userId)
+        .gte('date', startDate)
+        .lte('date', endDate)
+        .order('date', { ascending: true })
+    ),
+    timeStep('/insights', 'query_daily_scores_month', () =>
+      getDailyScoresForMonth(year, month)
+    ),
+    timeStep('/insights', 'query_calendar_scores', () =>
+      getAllDailyScoresForCalendar()
+    ),
+    timeStep('/insights', 'query_this_month_stats', () =>
+      getHabitMonthlyStats(year, month)
+    ),
+    timeStep('/insights', 'query_prior_month_stats', () =>
+      getHabitMonthlyStats(priorYear, priorMonth)
+    ),
   ])
-
-  function isUserIdError(err: { message?: string; code?: string } | null): boolean {
-    if (!err) return false
-    const msg = (err.message ?? '').toLowerCase()
-    return (
-      msg.includes('user_id') ||
-      msg.includes('does not exist') ||
-      msg.includes('schema cache') ||
-      err.code === '42703' ||
-      err.code === 'PGRST204'
-    )
-  }
-
-  // Graceful fallbacks if views in remote database do not have user_id column yet
-  let dailyScoresData = dailyScoresRes.data
-  if (!dailyScoresData && dailyScoresRes.error && isUserIdError(dailyScoresRes.error)) {
-    const fallback = await db
-      .from('daily_scores')
-      .select('*')
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: true })
-    dailyScoresData = fallback.data
-  }
-
-  let allScoresData = allScoresRes.data
-  if (!allScoresData && allScoresRes.error && isUserIdError(allScoresRes.error)) {
-    const fallback = await db
-      .from('daily_scores')
-      .select('date, completion_pct, total_active_habits, completed_habits, skipped_habits')
-      .order('date', { ascending: false })
-    allScoresData = fallback.data
-  }
-
-  let thisMonthStatsData = thisMonthStatsRes.data
-  if (!thisMonthStatsData && thisMonthStatsRes.error && isUserIdError(thisMonthStatsRes.error)) {
-    const fallback = await db
-      .from('habit_monthly_stats')
-      .select('*')
-      .eq('year', year)
-      .eq('month', month)
-    thisMonthStatsData = fallback.data
-  }
-
-  let priorMonthStatsData = priorMonthStatsRes.data
-  if (!priorMonthStatsData && priorMonthStatsRes.error && isUserIdError(priorMonthStatsRes.error)) {
-    const fallback = await db
-      .from('habit_monthly_stats')
-      .select('*')
-      .eq('year', priorYear)
-      .eq('month', priorMonth)
-    priorMonthStatsData = fallback.data
-  }
 
   const habits = (habitsRes.data ?? []) as Habit[]
   const monthEntries = (monthEntriesRes.data ?? []) as Array<{
@@ -311,11 +264,24 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
     const score = scoresByDate.get(dateStr)
     const entry = entriesByDate.get(dateStr)
 
-    const pct = score ? Math.round(Number(score.completion_pct)) : (isFuture ? null : 0)
-    const completed = score ? Number(score.completed_habits) : 0
-    const total = score ? Number(score.total_active_habits) : habits.filter(h => !h.is_archived).length
+    const compsMap: Record<string, { habit_id: string; is_completed: boolean; is_skipped?: boolean; amount?: number | null; target_snapshot?: number | null }> = {}
+    if (entry && entry.day_habit_completions) {
+      for (const c of entry.day_habit_completions) {
+        compsMap[c.habit_id] = c
+      }
+    }
 
-    if (score) {
+    const dayScore = computeDailyScore({
+      date: dateStr,
+      habits,
+      completionsMap: compsMap,
+    })
+
+    const pct = isFuture ? null : (score ? Math.round(Number(score.completion_pct)) : dayScore.completionPct)
+    const completed = score ? Number(score.completed_habits) : dayScore.completedCount
+    const total = score ? Number(score.total_active_habits) : dayScore.totalActive
+
+    if (!isFuture) {
       if (pct !== null && pct >= 100 && completed > 0 && total > 0) perfectDaysCount++
       if (pct !== null) {
         totalScoreSum += pct
@@ -323,21 +289,13 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
       }
     }
 
-    // Find missed habits if any (respecting creation date, archived date, and skips)
+    // Find missed habits if any using canonical isHabitActiveOnDate
     const missedHabitNames: string[] = []
-    if (entry && entry.day_habit_completions) {
-      const completedHabitIds = new Set(
-        entry.day_habit_completions.filter(c => c.is_completed).map(c => c.habit_id)
-      )
-      const skippedHabitIds = new Set(
-        entry.day_habit_completions.filter(c => c.is_skipped).map(c => c.habit_id)
-      )
+    if (!isFuture) {
       for (const h of habits) {
-        const createdDate = h.created_at ? h.created_at.slice(0, 10) : ''
-        const archivedDate = h.is_archived && h.archived_at ? h.archived_at.slice(0, 10) : ''
-        if (createdDate && dateStr < createdDate) continue
-        if (archivedDate && dateStr > archivedDate) continue
-        if (!h.is_archived && !completedHabitIds.has(h.id) && !skippedHabitIds.has(h.id)) {
+        const c = compsMap[h.id]
+        const isSkipped = c?.is_skipped === true
+        if (isHabitActiveOnDate(h, dateStr, isSkipped) && !c?.is_completed) {
           missedHabitNames.push(h.name)
         }
       }
@@ -358,95 +316,77 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
 
   const avgCompletionPct = scoredDaysCount > 0 ? Math.round(totalScoreSum / scoredDaysCount) : 0
 
-  // 2. Streaks calculation
-  // Perfect days: 100% completion with at least 1 habit completed
-  const allPerfectDates = new Set(
-    allScores
-      .filter(s => Number(s.completion_pct) >= 100 && Number(s.total_active_habits ?? 1) > 0 && Number(s.completed_habits ?? 1) > 0)
-      .map(s => s.date)
-  )
+  // 2. Streaks calculation using canonical lib/scoring
+  const allDayResults: DayScoreResult[] = allScores.map(s => {
+    const active = Number(s.total_active_habits ?? 0)
+    const completed = Number(s.completed_habits ?? 0)
+    const pct = Number(s.completion_pct ?? 0)
+    return {
+      date: s.date,
+      totalActive: active,
+      completedCount: completed,
+      skippedCount: Number((s as any).skipped_habits ?? 0),
+      completionPct: pct,
+      isPerfect: pct >= 100 && active > 0 && completed > 0,
+      isNeutral: active === 0,
+    }
+  })
 
-  // Rest days: all active habits were skipped (effective total = 0, skipped > 0)
-  const allRestDates = new Set(
-    allScores
-      .filter(s => Number((s as any).skipped_habits ?? 0) > 0 && Number(s.total_active_habits ?? 0) === 0)
-      .map(s => s.date)
-  )
-
-  // Current streak
-  let currentStreak = 0
-  const checkDate = new Date(today + 'T00:00:00')
-  const todayStr = today
-  if (!allPerfectDates.has(todayStr) && !allRestDates.has(todayStr)) {
-    checkDate.setDate(checkDate.getDate() - 1)
-  }
-  while (true) {
-    const curStr = toAppDateString(checkDate)
-    if (allPerfectDates.has(curStr)) {
-      currentStreak++
-      checkDate.setDate(checkDate.getDate() - 1)
-    } else if (allRestDates.has(curStr)) {
-      // Skipped/rest day does NOT break current streak; bridge across it
-      checkDate.setDate(checkDate.getDate() - 1)
+  // Ensure current month points are reflected
+  for (const pt of dailyPoints) {
+    if (pt.isFuture) continue
+    const existing = allDayResults.find(d => d.date === pt.date)
+    if (existing) {
+      existing.totalActive = pt.total
+      existing.completedCount = pt.completed
+      existing.completionPct = pt.pct ?? 0
+      existing.isPerfect = (pt.pct ?? 0) >= 100 && pt.total > 0 && pt.completed > 0
+      existing.isNeutral = pt.total === 0
     } else {
-      break
+      allDayResults.push({
+        date: pt.date,
+        totalActive: pt.total,
+        completedCount: pt.completed,
+        skippedCount: 0,
+        completionPct: pt.pct ?? 0,
+        isPerfect: (pt.pct ?? 0) >= 100 && pt.total > 0 && pt.completed > 0,
+        isNeutral: pt.total === 0,
+      })
     }
   }
 
-  // Longest streak ever
-  const sortedAscAll = [...new Set(allScores.map(s => s.date))].sort()
-  let longestStreakEver = 0
-  let run = 0
-  let prevD: Date | null = null
-  for (const ds of sortedAscAll) {
-    if (allRestDates.has(ds)) {
-      if (prevD) {
-        const dObj = new Date(ds + 'T00:00:00')
-        const diff = Math.round((dObj.getTime() - prevD.getTime()) / (1000 * 60 * 60 * 24))
-        if (diff === 1) prevD = dObj
-      }
-      continue
-    }
-    if (!allPerfectDates.has(ds)) {
-      run = 0
-      prevD = null
-      continue
-    }
-    const dObj = new Date(ds + 'T00:00:00')
-    if (!prevD) {
-      run = 1
-    } else {
-      const diff = Math.round((dObj.getTime() - prevD.getTime()) / (1000 * 60 * 60 * 24))
-      run = diff === 1 ? run + 1 : 1
-    }
-    prevD = dObj
-    longestStreakEver = Math.max(longestStreakEver, run)
-  }
+  const { currentStreak, longestStreak: longestStreakEver } = computeStreaks(allDayResults, today)
 
   // Month's longest streak
-  let monthLongestStreak = 0
-  let curMonthRun = 0
-  for (const pt of dailyPoints) {
-    const isRest = pt.total === 0 && pt.completed === 0 && !pt.isFuture
-    if (isRest) {
-      continue // rest day doesn't break streak
-    }
-    if (pt.pct !== null && pt.pct >= 100 && pt.completed > 0) {
-      curMonthRun++
-      monthLongestStreak = Math.max(monthLongestStreak, curMonthRun)
-    } else if (!pt.isFuture) {
-      curMonthRun = 0
-    }
-  }
+  const monthDayResults: DayScoreResult[] = dailyPoints
+    .filter(pt => !pt.isFuture)
+    .map(pt => ({
+      date: pt.date,
+      totalActive: pt.total,
+      completedCount: pt.completed,
+      skippedCount: 0,
+      completionPct: pt.pct ?? 0,
+      isPerfect: (pt.pct ?? 0) >= 100 && pt.total > 0 && pt.completed > 0,
+      isNeutral: pt.total === 0,
+    }))
+  const { longestStreak: monthLongestStreak } = computeStreaks(monthDayResults, today)
 
   // 3. Per-Habit Deep Analysis
   const habitItems: HabitInsightItem[] = []
 
-  // Pre-calculate habit completions per day
+  // Pre-calculate habit completions & records per day
   const habitCompletionDates = new Map<string, Set<string>>()
+  const habitRecordsMap = new Map<string, Map<string, HabitRecord>>()
   for (const e of monthEntries) {
     if (!e.day_habit_completions) continue
     for (const c of e.day_habit_completions) {
+      if (!habitRecordsMap.has(c.habit_id)) {
+        habitRecordsMap.set(c.habit_id, new Map())
+      }
+      habitRecordsMap.get(c.habit_id)!.set(e.date, {
+        isCompleted: Boolean(c.is_completed),
+        isSkipped: Boolean(c.is_skipped),
+      })
       if (c.is_completed) {
         if (!habitCompletionDates.has(c.habit_id)) {
           habitCompletionDates.set(c.habit_id, new Set())
@@ -502,23 +442,14 @@ export async function getInsightsData(year: number, month: number): Promise<Insi
     const missedDays = Math.max(0, daysActive - totalCompletions)
     const delta = lastPct !== null ? pct - Math.round(lastPct) : null
 
-    // Habit best streak this month
-    let habitBestStreak = 0
-    let hRun = 0
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-      if (compSet.has(dStr)) {
-        hRun++
-        habitBestStreak = Math.max(habitBestStreak, hRun)
-      } else {
-        const entry = entriesByDate.get(dStr)
-        const isSkipped = entry?.day_habit_completions?.some((c: any) => c.habit_id === h.id && c.is_skipped)
-        // Skip day does not break per-habit streak if in run
-        if (!isSkipped) {
-          hRun = 0
-        }
-      }
-    }
+    // Habit best streak this month via canonical calculateHabitStreaks from lib/scoring
+    const recMap = habitRecordsMap.get(h.id) ?? new Map()
+    const { bestStreak: habitBestStreak } = calculateHabitStreaks(
+      recMap,
+      createdDate || startDate,
+      archivedDate || null,
+      endDate
+    )
 
     // Weekly sparkline: 4 bars
     const weeklySparkline = weekDayRanges.map(range => {
@@ -773,13 +704,15 @@ export async function getMonthlyReviewData(year: number, month: number): Promise
   const userId = user?.id ?? ''
 
   const [insights, reviewRes] = await Promise.all([
-    getInsightsData(year, month),
-    db.from('month_reviews')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('year', year)
-      .eq('month', month)
-      .maybeSingle(),
+    timeStep('/review', 'query_insights_data', () => getInsightsData(year, month)),
+    timeStep('/review', 'query_month_reviews', () =>
+      db.from('month_reviews')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('year', year)
+        .eq('month', month)
+        .maybeSingle()
+    ),
   ])
 
   const review = (reviewRes.data ?? null) as MonthReview | null
