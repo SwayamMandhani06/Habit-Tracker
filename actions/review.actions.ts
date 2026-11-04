@@ -2,7 +2,7 @@
 // actions/review.actions.ts — Month review actions with strict auth & ownership verification
 import { revalidatePath } from 'next/cache'
 import { getSessionContext } from '@/lib/auth/session'
-import { getHabitMonthlyStats } from '@/lib/db/stats'
+import { getHabitMonthlyStats, getDailyScoresForMonth } from '@/lib/db/stats'
 import { getMonthDateRange } from '@/lib/date'
 import type { MonthReview, HabitMonthlyStat, Database } from '@/lib/supabase/types'
 import { z } from 'zod'
@@ -35,24 +35,8 @@ export async function upsertMonthReviewAction(input: z.infer<typeof upsertSchema
 
     const { startDate, endDate } = getMonthDateRange(r.data.year, r.data.month)
 
-    // Strictly scope daily_scores query to authenticated user with legacy fallback
-    let { data: scores, error: scoresError } = await db
-      .from('daily_scores')
-      .select('completion_pct, sleep_hours')
-      .eq('user_id', user.id)
-      .gte('date', startDate)
-      .lte('date', endDate)
-
-    if (scoresError && (scoresError.message?.toLowerCase().includes('user_id') || scoresError.code === '42703')) {
-      const fallback = await db
-        .from('daily_scores')
-        .select('completion_pct, sleep_hours')
-        .gte('date', startDate)
-        .lte('date', endDate)
-      scores = fallback.data
-    }
-
-    const scoreRows = (scores ?? []) as unknown as Array<{ completion_pct: number; sleep_hours: number | null }>
+    // Fetch scores via pure lib/scoring (NO views)
+    const scoreRows = await getDailyScoresForMonth(r.data.year, r.data.month)
 
     const avgCompletion = scoreRows.length > 0
       ? scoreRows.reduce((s, x) => s + Number(x.completion_pct), 0) / scoreRows.length

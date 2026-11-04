@@ -48,13 +48,24 @@ export async function saveWeeklyIntentionAction(input: z.infer<typeof intentionS
       }, { onConflict: 'user_id,year,week_number' })
 
     if (error) {
-      console.warn('saveWeeklyIntention error:', error.message)
-      return { error: error.message }
+      console.error('[saveWeeklyIntentionAction] Postgres error:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
+      return { error: 'Failed to save intention' }
     }
     revalidatePath('/today')
     revalidatePath('/dashboard')
     return { success: true }
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : 'Failed to save intention' }
+  } catch (e: any) {
+    console.error('[saveWeeklyIntentionAction] Unexpected server exception:', {
+      name: e?.name,
+      message: e?.message,
+      code: e?.code,
+      stack: e?.stack,
+    })
+    return { error: 'Failed to save intention' }
   }
 }

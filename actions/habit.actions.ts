@@ -341,3 +341,30 @@ export async function reorderSubitemsAction(input: z.infer<typeof reorderSchema>
     return { error: e instanceof Error ? e.message : 'Failed to reorder sub-items' }
   }
 }
+
+export async function seedDefaultDataAction(): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const supabase = await createServerClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (!user || authError) {
+      return { success: false, error: 'Not authenticated' }
+    }
+
+    const { data, error } = await supabase.rpc('seed_default_data')
+    if (error) {
+      console.error('[seedDefaultDataAction] Failed to seed default data via RPC:', {
+        code: error.code,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+      })
+      return { success: false, error: error.message }
+    }
+
+    revalidateAllHabitPaths()
+    return { success: true, data }
+  } catch (e: any) {
+    console.error('[seedDefaultDataAction] Unexpected error:', e)
+    return { success: false, error: e?.message || 'Failed to seed default habits' }
+  }
+}
