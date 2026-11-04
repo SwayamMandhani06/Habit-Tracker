@@ -5,40 +5,29 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-
-  // ── Always-public routes ─────────────────────────────────────────────────
-  if (
-    pathname === '/' ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/signup') ||
-    pathname.startsWith('/auth') ||
-    pathname.startsWith('/api/auth') ||
-    pathname.startsWith('/_next') ||
-    pathname.startsWith('/favicon') ||
-    pathname.startsWith('/icons') ||
-    pathname.startsWith('/screenshots') ||
-    pathname === '/manifest.webmanifest' ||
-    pathname === '/sw.js'
-  ) {
-    return NextResponse.next()
+/**
+ * Copies all cookies and security/cache-busting headers onto redirect and error responses.
+ * Guarantees that freshly refreshed session tokens and auth cookies are never lost
+ * and browsers never cache auth redirects.
+ */
+function copyCookiesAndCacheHeaders(target: NextResponse, source: NextResponse): NextResponse {
+  source.cookies.getAll().forEach((cookie) => {
+    target.cookies.set(cookie.name, cookie.value, cookie)
+  })
+  const serverTiming = source.headers.get('Server-Timing')
+  if (serverTiming) {
+    target.headers.set('Server-Timing', serverTiming)
   }
+  target.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+  target.headers.set('Pragma', 'no-cache')
+  target.headers.set('Expires', '0')
+  return target
+}
 
-  // ── Supabase session refresh ──────────────────────────────────────────────
+export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
-  // Synchronize Vercel edge geo timezone if client cookie not yet established
-  const vercelTz = request.headers.get('x-vercel-ip-timezone')
-  if (vercelTz && !request.cookies.get('x-user-timezone')) {
-    request.cookies.set('x-user-timezone', vercelTz)
-    supabaseResponse.cookies.set('x-user-timezone', vercelTz, {
-      path: '/',
-      maxAge: 31536000,
-      sameSite: 'lax',
-    })
-  }
-
+  const t0 = performance.now()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -58,17 +47,78 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // IMPORTANT: Do not run any code between createServerClient and getUser()
-  // that could cause the session to be stale.
-  const { data: { user } } = await supabase.auth.getUser()
+  // IMPORTANT: Keep getUser() in middleware until asymmetric JWT signing key is confirmed active.
+  // No code between createServerClient and getUser().
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  const mwAuthDur = Math.round((performance.now() - t0) * 100) / 100
 
-  if (!user) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('from', pathname)
-    return NextResponse.redirect(loginUrl)
+  // Server-Timing header + JSON timing log
+  supabaseResponse.headers.set('Server-Timing', `mw_auth;dur=${mwAuthDur};desc="Middleware Auth"`)
+  console.log(
+    JSON.stringify({
+      type: 'timing',
+      page: request.nextUrl.pathname,
+      step: 'middleware_auth',
+      durationMs: mwAuthDur,
+      timestamp: Date.now(),
+    })
+  )
+
+  // Synchronize Vercel edge geo timezone if client cookie not yet established
+  const vercelTz = request.headers.get('x-vercel-ip-timezone')
+  if (vercelTz && !request.cookies.get('x-user-timezone')) {
+    supabaseResponse.cookies.set('x-user-timezone', vercelTz, {
+      path: '/',
+      maxAge: 31536000,
+      sameSite: 'lax',
+    })
   }
 
-  return supabaseResponse
+  const { pathname, search, searchParams } = request.nextUrl
+
+  // 1. Signed-in routing
+  if (user) {
+    // Redirect signed-in user away from landing, login, and signup to /today
+    // (allow ?preview=true on homepage for reviewing marketing page)
+    if (
+      pathname === '/login' ||
+      pathname === '/signup' ||
+      (pathname === '/' && searchParams.get('preview') !== 'true')
+    ) {
+      const todayUrl = new URL('/today', request.url)
+      const redirectResponse = NextResponse.redirect(todayUrl)
+      return copyCookiesAndCacheHeaders(redirectResponse, supabaseResponse)
+    }
+    return supabaseResponse
+  }
+
+  // 2. Signed-out routing
+  // Public routes: landing page (/), /offline.html, /login, /signup, /auth*, /api/auth*
+  const isPublicRoute =
+    pathname === '/' ||
+    pathname === '/offline.html' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup') ||
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/api/auth')
+
+  if (isPublicRoute) {
+    return supabaseResponse
+  }
+
+  // API endpoints must return 401 JSON for unauthenticated calls (never redirect 307 to HTML)
+  if (pathname.startsWith('/api/')) {
+    const unauthResponse = NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return copyCookiesAndCacheHeaders(unauthResponse, supabaseResponse)
+  }
+
+  // Protected page routes: redirect to /login?from=...
+  const loginUrl = new URL('/login', request.url)
+  loginUrl.searchParams.set('from', `${pathname}${search}`)
+  const redirectResponse = NextResponse.redirect(loginUrl)
+  return copyCookiesAndCacheHeaders(redirectResponse, supabaseResponse)
 }
 
 export const config = {
@@ -78,13 +128,12 @@ export const config = {
      * - _next/static (static files)
      * - _next/image (image optimization)
      * - favicon.ico
-     * - /icons
-     * - /screenshots
-     * - /manifest.webmanifest
-     * - / (public homepage)
-     * - /login (auth page)
-     * - /auth/* (auth callbacks)
+     * - icon-*, apple-*
+     * - /icons, /screenshots
+     * - /manifest.webmanifest, /manifest.json
+     * - /sw.js
+     * - /offline.html
      */
-    '/((?!_next/static|_next/image|favicon.ico|icons|screenshots|manifest.webmanifest|sw.js).*)',
+    '/((?!_next/static|_next/image|favicon\\.ico|icon-.*|apple-.*|icons|screenshots|manifest\\.webmanifest|manifest\\.json|sw\\.js|offline\\.html).*)',
   ],
 }

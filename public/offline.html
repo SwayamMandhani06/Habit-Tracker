@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Offline — 1% Better</title>
+  <style>
+    :root {
+      --bg: #1A1815;
+      --text: #F7F5F2;
+      --text-muted: #8C827A;
+      --border: rgba(255, 255, 255, 0.1);
+      --font-mono: 'IBM Plex Mono', monospace;
+    }
+    body {
+      margin: 0;
+      padding: 24px;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      box-sizing: border-box;
+      text-align: center;
+    }
+    .card {
+      max-width: 380px;
+      padding: 32px 24px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+    h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 0 0 12px;
+      letter-spacing: -0.01em;
+    }
+    p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+      margin: 0 0 24px;
+    }
+    button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+    button:hover {
+      background: rgba(255, 255, 255, 0.05);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="font-size: 2rem; margin-bottom: 16px;">~/</div>
+    <h1>You are offline</h1>
+    <p>1% Better requires an active network connection to load server-rendered data. Please reconnect to resume.</p>
+    <button onclick="window.location.reload()">Retry Connection</button>
+  </div>
+</body>
+</html>
+
