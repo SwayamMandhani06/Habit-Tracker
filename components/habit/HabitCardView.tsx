@@ -26,6 +26,7 @@ export interface HabitCardViewProps {
   unit?: string | null
   stepValue?: number
   onSetAmount?: (amount: number) => void
+  forceTwoRow?: boolean
 
   // Checklist specifics
   subitems?: Array<{ id: string; name: string; completed: boolean }>
@@ -81,6 +82,7 @@ export function HabitCardView({
   unit,
   stepValue = 1,
   onSetAmount,
+  forceTwoRow = false,
   subitems = [],
   onToggleSubitem,
   onToggle,
@@ -352,9 +354,35 @@ export function HabitCardView({
               </button>
             )}
 
+            {/* Progress / Value Display (e.g. "120/150 min" or actionLabel "+15m") */}
+            {(variant === 'progress' || Boolean(valueDisplay)) &&
+              variant !== 'amount' &&
+              variant !== 'checkbox' &&
+              variant !== 'checklist' && (
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {valueDisplay && (
+                    <span className="font-mono text-xs font-bold text-[var(--text-primary)] tabular-nums">
+                      {valueDisplay}
+                    </span>
+                  )}
+                  {actionLabel && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onIncrement?.(e)
+                      }}
+                      className="font-mono text-[10px] font-bold px-2 py-1 rounded-md bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)] hover:bg-[var(--accent)] hover:text-white transition-colors cursor-pointer select-none active:scale-95"
+                    >
+                      {actionLabel}
+                    </button>
+                  )}
+                </div>
+              )}
+
             {/* Desktop-only: Inline Stepper on large screens (>= 640px) */}
-            {variant === 'amount' && targetAmount !== null && (
-              <div className="hidden sm:flex items-center gap-2">
+            {variant === 'amount' && targetAmount !== null && !forceTwoRow && (
+              <div className="habit-card-stepper-desktop hidden sm:flex items-center gap-2">
                 <div
                   className="flex items-center gap-1.5 bg-[var(--surface)] px-1.5 py-1 rounded-xl border border-[var(--border)]"
                   onClick={(e) => e.stopPropagation()}
@@ -482,10 +510,14 @@ export function HabitCardView({
           </div>
         </div>
 
-        {/* ROW 2 (Mobile only, < 640px / < 480px): Full-width Stepper [-] value / target unit [+] + Play Button */}
+        {/* ROW 2 (Mobile only or narrow card < 480px): Full-width Stepper [-] value / target unit [+] + Play Button */}
         {variant === 'amount' && targetAmount !== null && (
           <div
-            className="sm:hidden mt-2.5 pt-2.5 border-t border-[var(--border)]/70 flex items-center gap-2 w-full min-w-0"
+            className={
+              forceTwoRow
+                ? 'mt-2.5 pt-2.5 border-t border-[var(--border)]/70 flex items-center gap-2 w-full min-w-0'
+                : 'habit-card-stepper-mobile sm:hidden mt-2.5 pt-2.5 border-t border-[var(--border)]/70 flex items-center gap-2 w-full min-w-0'
+            }
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex-1 flex items-center justify-between bg-[var(--surface)] p-1 rounded-xl border border-[var(--border)] min-w-0">

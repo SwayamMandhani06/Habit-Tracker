@@ -97,7 +97,7 @@ export function Hero3DScene() {
       unit: 'glasses',
       targetZ: 65,
       xOffset: -255, // pops out to the left over phone rim
-      yPos: 135,
+      yPos: 128,
     },
     {
       id: 'gym',
@@ -112,7 +112,7 @@ export function Hero3DScene() {
       unit: 'session',
       targetZ: 90,
       xOffset: -248,
-      yPos: 245,
+      yPos: 246,
     },
     {
       id: 'deepwork',
@@ -143,7 +143,7 @@ export function Hero3DScene() {
       unit: 'steps',
       targetZ: 135,
       xOffset: -252,
-      yPos: 412,
+      yPos: 410,
       actionLabel: '+1 step',
     },
   ])
@@ -612,6 +612,7 @@ export function Hero3DScene() {
                   targetAmount={habit.total}
                   unit={habit.unit}
                   actionLabel={habit.actionLabel}
+                  forceTwoRow={habit.variant === 'amount'}
                   onToggle={() => handleToggleHabit(habit.id)}
                   onIncrement={(e) => handleIncrement(habit.id, e)}
                   onDecrement={(e) => handleDecrement(habit.id, e)}

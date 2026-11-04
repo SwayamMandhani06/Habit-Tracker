@@ -926,3 +926,26 @@ html.dark,
     font-size: 0.8125rem !important;
     box-shadow: none !important;
   }
+
+  /* ── Habit Card Container Query (< 480px two-row layout) ──────────────────── */
+  .habit-card {
+    container-type: inline-size;
+  }
+
+  @container (max-width: 479px) {
+    .habit-card-stepper-desktop {
+      display: none !important;
+    }
+    .habit-card-stepper-mobile {
+      display: flex !important;
+    }
+  }
+
+  @container (min-width: 480px) {
+    .habit-card-stepper-desktop {
+      display: flex !important;
+    }
+    .habit-card-stepper-mobile {
+      display: none !important;
+    }
+  }
