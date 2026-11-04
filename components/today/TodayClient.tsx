@@ -1,15 +1,17 @@
 'use client'
 // components/today/TodayClient.tsx — Daily check-in with refined typography & auto-save
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useRouter } from 'next/navigation'
 import type { HabitWithSubitems, DayEntry, DayCompletionState } from '@/lib/supabase/types'
+import { computeDailyScore, isHabitActiveOnDate } from '@/lib/scoring'
 import {
   toggleHabitCompletionAction,
   toggleHabitSkipAction,
   toggleSubitemCompletionAction,
   setHabitAmountAction,
 } from '@/actions/completion.actions'
+import { seedDefaultDataAction } from '@/actions/habit.actions'
 import { updateDayEntryAction } from '@/actions/entry.actions'
 import { HabitCardView } from '@/components/habit/HabitCardView'
 import { SignalBarSelector } from './SignalBarSelector'
@@ -18,13 +20,15 @@ import { WeeklyIntention } from './WeeklyIntention'
 import { FocusTimerModal } from './FocusTimerModal'
 import { playCompletionChime } from '@/lib/audio'
 import { addDays } from '@/lib/stats/habit-math'
+import { enqueueOfflineMutation } from '@/lib/offline-queue'
 import Link from 'next/link'
 import { ArrowRight, Clock, SlidersHorizontal, Grid, Check, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Props {
+  userId?: string
   date: string
   today?: string
-  entry: DayEntry
+  entry: DayEntry | null
   habits: HabitWithSubitems[]
   completions: DayCompletionState
   weekStrip?: Array<{
@@ -58,6 +62,7 @@ const MONTH_NAMES = [
 ]
 
 export function TodayClient({
+  userId,
   date,
   today,
   entry,
@@ -71,11 +76,33 @@ export function TodayClient({
   recentCompletions = {},
 }: Props) {
   const router = useRouter()
+  const currentUserId = userId || entry?.user_id || habits[0]?.user_id || ''
   const [habitComps, setHabitComps] = useState(completions.habitCompletions)
   const [habitSkips, setHabitSkips] = useState<Record<string, boolean>>(completions.habitSkips ?? {})
   const [subitemComps, setSubitemComps] = useState(completions.subitemCompletions)
   const [habitAmounts, setHabitAmounts] = useState<Record<string, number>>(completions.habitAmounts ?? {})
   const [habitTargets, setHabitTargets] = useState<Record<string, number | null>>(completions.habitTargets ?? {})
+
+  // Zero habits auto-seed handling
+  const [isSeeding, setIsSeeding] = useState(false)
+  const [seedError, setSeedError] = useState<string | null>(null)
+
+  const handleSeedDefaultHabits = async () => {
+    setIsSeeding(true)
+    setSeedError(null)
+    try {
+      const res = await seedDefaultDataAction()
+      if (res.success) {
+        router.refresh()
+      } else {
+        setSeedError(res.error || 'Failed to seed default habits')
+      }
+    } catch (err: any) {
+      setSeedError(err?.message || 'Network error while attempting to set up default habits')
+    } finally {
+      setIsSeeding(false)
+    }
+  }
 
   // Status Filter: All, To Do, Done
   const [statusFilter, setStatusFilter] = useState<'all' | 'todo' | 'done'>('all')
@@ -115,15 +142,15 @@ export function TodayClient({
   const [focusTimerOpen, setFocusTimerOpen] = useState(false)
   const [focusTimerHabit, setFocusTimerHabit] = useState<HabitWithSubitems | null>(null)
 
-  const [mood, setMood] = useState<number | null>(entry.mood)
-  const [energy, setEnergy] = useState<number | null>(entry.energy)
-  const [sleep, setSleep] = useState<string>(entry.sleep_hours?.toString() ?? '')
-  const [weight, setWeight] = useState<string>(entry.weight_kg?.toString() ?? '')
-  const [screenTime, setScreenTime] = useState<string>(entry.screen_time_minutes?.toString() ?? '')
-  const [notes, setNotes] = useState<string>(entry.notes ?? '')
+  const [mood, setMood] = useState<number | null>(entry?.mood ?? null)
+  const [energy, setEnergy] = useState<number | null>(entry?.energy ?? null)
+  const [sleep, setSleep] = useState<string>(entry?.sleep_hours?.toString() ?? '')
+  const [weight, setWeight] = useState<string>(entry?.weight_kg?.toString() ?? '')
+  const [screenTime, setScreenTime] = useState<string>(entry?.screen_time_minutes?.toString() ?? '')
+  const [notes, setNotes] = useState<string>(entry?.notes ?? '')
   const [selectedCategory, setSelectedCategory] = useState<'all' | 'focus' | 'body' | 'mind' | 'routine'>('all')
   const [noteTag, setNoteTag] = useState<'Note' | 'Planned' | 'Completed'>(() => {
-    const raw = entry.notes ?? ''
+    const raw = entry?.notes ?? ''
     if (raw.startsWith('[Planned]')) return 'Planned'
     if (raw.startsWith('[Completed]')) return 'Completed'
     return 'Note'
@@ -161,13 +188,39 @@ export function TodayClient({
     } catch {}
   }, [date])
 
-  // A skipped habit doesn't count against completion % — excluded from denominator
-  const activeHabits = habits.filter((h) => !habitSkips[h.id])
-  const completedCount = activeHabits.filter((h) => habitComps[h.id] === true).length
-  const totalCount = activeHabits.length
-  // If all habits are skipped or user has 0 habits, completion is 0% and does not falsely trigger celebration
-  const pct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0
-  const isPerfect = totalCount > 0 && completedCount > 0 && pct >= 100
+  // Canonical scoring from lib/scoring
+  const allSubitems = useMemo(() => habits.flatMap((h) => h.subitems ?? []), [habits])
+  const completionsMap = useMemo(() => {
+    const map: Record<string, { habit_id: string; is_completed: boolean; is_skipped: boolean }> = {}
+    for (const h of habits) {
+      map[h.id] = {
+        habit_id: h.id,
+        is_completed: habitComps[h.id] === true,
+        is_skipped: habitSkips[h.id] === true,
+      }
+    }
+    return map
+  }, [habits, habitComps, habitSkips])
+
+  const dailyScore = useMemo(() => {
+    return computeDailyScore({
+      date,
+      habits,
+      completionsMap,
+      subitems: allSubitems,
+      subitemCompletionsMap: subitemComps,
+      habitSkipsMap: habitSkips,
+    })
+  }, [date, habits, completionsMap, allSubitems, subitemComps, habitSkips])
+
+  const activeHabits = useMemo(() => {
+    return habits.filter((h) => isHabitActiveOnDate(h, date, habitSkips[h.id] === true))
+  }, [habits, date, habitSkips])
+
+  const completedCount = dailyScore.completedCount
+  const totalCount = dailyScore.totalActive
+  const pct = dailyScore.completionPct
+  const isPerfect = dailyScore.isPerfect
 
   // Category classification helper for Streak-style category filter pills
   const getHabitCategory = useCallback((h: HabitWithSubitems): 'focus' | 'body' | 'mind' | 'routine' => {
@@ -212,12 +265,12 @@ export function TodayClient({
     const parsedScreenTime = debouncedScreenTime ? parseInt(debouncedScreenTime, 10) : null
     const currentNotes = debouncedNotes
 
-    const initialSleep = entry.sleep_hours ?? null
-    const initialWeight = entry.weight_kg ?? null
-    const initialScreenTime = entry.screen_time_minutes ?? null
-    const initialNotes = entry.notes ?? ''
-    const initialMood = entry.mood ?? null
-    const initialEnergy = entry.energy ?? null
+    const initialSleep = entry?.sleep_hours ?? null
+    const initialWeight = entry?.weight_kg ?? null
+    const initialScreenTime = entry?.screen_time_minutes ?? null
+    const initialNotes = entry?.notes ?? ''
+    const initialMood = entry?.mood ?? null
+    const initialEnergy = entry?.energy ?? null
 
     const hasChanged =
       debouncedMood !== initialMood ||
@@ -269,6 +322,14 @@ export function TodayClient({
       triggerHaptic()
     }
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (currentUserId) {
+        enqueueOfflineMutation(currentUserId, 'setHabitCompletion', { date, habitId, isCompleted: next })
+      }
+      inFlightHabitsRef.current.delete(habitId)
+      return
+    }
+
     toggleHabitCompletionAction({ date, habitId, isCompleted: next })
       .then((res) => {
         if (res?.error) {
@@ -281,12 +342,10 @@ export function TodayClient({
         }
       })
       .catch(() => {
-        setHabitComps((c) => ({ ...c, [habitId]: prev }))
-        if (next && prevSkip) {
-          setHabitSkips((s) => ({ ...s, [habitId]: true }))
+        // Enqueue offline rather than reverting
+        if (currentUserId) {
+          enqueueOfflineMutation(currentUserId, 'setHabitCompletion', { date, habitId, isCompleted: next })
         }
-        setActionError('Network error updating habit')
-        setTimeout(() => setActionError(null), 3500)
       })
       .finally(() => {
         inFlightHabitsRef.current.delete(habitId)
@@ -315,6 +374,21 @@ export function TodayClient({
         triggerHaptic()
       }
 
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (currentUserId) {
+          enqueueOfflineMutation(currentUserId, 'setSubitemCompletion', {
+            date,
+            habitId,
+            subitemId,
+            isCompleted: next,
+            allSubitemIds,
+            currentSubitemCompletions: updatedSubComps,
+          })
+        }
+        inFlightSubitemsRef.current.delete(subitemId)
+        return
+      }
+
       toggleSubitemCompletionAction({
         date,
         habitId,
@@ -335,13 +409,16 @@ export function TodayClient({
           }
         })
         .catch(() => {
-          setSubitemComps((c) => ({ ...c, [subitemId]: prev }))
-          setHabitComps((c) => ({ ...c, [habitId]: prevHabitComp }))
-          if (next && prevSkip) {
-            setHabitSkips((s) => ({ ...s, [habitId]: true }))
+          if (currentUserId) {
+            enqueueOfflineMutation(currentUserId, 'setSubitemCompletion', {
+              date,
+              habitId,
+              subitemId,
+              isCompleted: next,
+              allSubitemIds,
+              currentSubitemCompletions: updatedSubComps,
+            })
           }
-          setActionError('Network error updating checklist item')
-          setTimeout(() => setActionError(null), 3500)
         })
         .finally(() => {
           inFlightSubitemsRef.current.delete(subitemId)
@@ -362,6 +439,14 @@ export function TodayClient({
       setHabitComps((c) => ({ ...c, [habitId]: false }))
     }
 
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      if (currentUserId) {
+        enqueueOfflineMutation(currentUserId, 'setHabitSkip', { date, habitId, isSkipped: next })
+      }
+      inFlightSkipsRef.current.delete(habitId)
+      return
+    }
+
     toggleHabitSkipAction({ date, habitId, isSkipped: next })
       .then((res) => {
         if (res?.error) {
@@ -371,9 +456,9 @@ export function TodayClient({
         }
       })
       .catch(() => {
-        setHabitSkips((s) => ({ ...s, [habitId]: prev }))
-        setActionError('Network error updating skip status')
-        setTimeout(() => setActionError(null), 3500)
+        if (currentUserId) {
+          enqueueOfflineMutation(currentUserId, 'setHabitSkip', { date, habitId, isSkipped: next })
+        }
       })
       .finally(() => {
         inFlightSkipsRef.current.delete(habitId)
@@ -417,6 +502,15 @@ export function TodayClient({
       }
 
       amountDebounceTimers.current[habitId] = setTimeout(async () => {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          if (currentUserId) {
+            enqueueOfflineMutation(currentUserId, 'setHabitAmount', { habitId, date, amount: cleanAmount })
+          }
+          lastCommittedAmounts.current[habitId] = cleanAmount
+          delete amountDebounceTimers.current[habitId]
+          return
+        }
+
         try {
           const res = await setHabitAmountAction({ habitId, date, amount: cleanAmount })
           if (res?.error) {
@@ -433,12 +527,11 @@ export function TodayClient({
             }
           }
         } catch {
-          const rollbackAmt = lastCommittedAmounts.current[habitId] ?? prevAmount
-          const rollbackComp = target !== null ? rollbackAmt >= target : false
-          setHabitAmounts((prev) => ({ ...prev, [habitId]: rollbackAmt }))
-          setHabitComps((prev) => ({ ...prev, [habitId]: rollbackComp }))
-          setActionError('Network error saving amount')
-          setTimeout(() => setActionError(null), 3500)
+          // Enqueue offline rather than rolling back
+          if (currentUserId) {
+            enqueueOfflineMutation(currentUserId, 'setHabitAmount', { habitId, date, amount: cleanAmount })
+          }
+          lastCommittedAmounts.current[habitId] = cleanAmount
         } finally {
           delete amountDebounceTimers.current[habitId]
         }
@@ -521,7 +614,7 @@ export function TodayClient({
   const formattedDate = `${dayName}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`
 
   return (
-    <div className="page-container" style={{ maxWidth: 740, margin: '0 auto', paddingBottom: 64 }}>
+    <div className="page-container" style={{ maxWidth: 740, margin: '0 auto', paddingBottom: 'calc(64px + var(--safe-bottom))' }}>
       <AnimatePresence>{showCelebration && <CelebrationOverlay />}</AnimatePresence>
 
       {/* Weekly Intention Line at Very Top */}
@@ -753,7 +846,13 @@ export function TodayClient({
       )}
 
       {/* ── STICKY COMPLETION HEADER ──────────────────────────────────── */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 py-2.5 bg-[var(--bg)]/95 backdrop-blur-md border-b border-[var(--border)] mb-4 flex items-center justify-between shadow-2xs">
+      <div
+        className="sticky top-0 z-30 -mx-4 px-4 bg-[var(--bg)]/95 backdrop-blur-md border-b border-[var(--border)] mb-4 flex items-center justify-between shadow-2xs"
+        style={{
+          paddingTop: 'calc(10px + var(--safe-top))',
+          paddingBottom: 10,
+        }}
+      >
         <div className="flex items-center gap-2 font-mono text-xs font-semibold text-[var(--text-primary)]">
           <span className="text-[var(--accent)]">[</span>
           <span>
@@ -893,34 +992,34 @@ export function TodayClient({
       </div>
 
       {/* ── HABITS LIST & VIEW SWITCHER ───────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 mb-3">
         <span className="section-label">DAILY DISCIPLINES</span>
 
-        {/* View Switcher: Classic vs. 5-Day Strip */}
-        <div className="flex items-center gap-1 p-0.5 rounded-full bg-[var(--surface-raised)] border border-[var(--border)] font-mono text-[11px]">
+        {/* View Switcher: Classic vs. Week Strip (Title above, toggle below on phones) */}
+        <div className="flex items-center gap-1 p-0.5 rounded-full bg-[var(--surface-raised)] border border-[var(--border)] font-mono text-[11px] self-start sm:self-auto">
           <button
             type="button"
             onClick={() => setViewMode('classic')}
-            className={`px-3 py-1 rounded-full transition-all font-semibold flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-full transition-all font-semibold flex items-center gap-1.5 min-h-[36px] sm:min-h-0 ${
               viewMode === 'classic'
                 ? 'bg-[var(--surface)] text-[var(--text-primary)] shadow-2xs border border-[var(--border)]'
                 : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <SlidersHorizontal size={11} />
+            <SlidersHorizontal size={13} />
             <span>Classic</span>
           </button>
           <button
             type="button"
             onClick={() => setViewMode('minimal')}
-            className={`px-3 py-1 rounded-full transition-all font-semibold flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-full transition-all font-semibold flex items-center gap-1.5 min-h-[36px] sm:min-h-0 ${
               viewMode === 'minimal'
                 ? 'bg-[var(--surface)] text-[var(--text-primary)] shadow-2xs border border-[var(--border)]'
                 : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
             }`}
           >
-            <Grid size={11} />
-            <span>5-Day Strip</span>
+            <Grid size={13} />
+            <span>Week</span>
           </button>
         </div>
       </div>
@@ -928,11 +1027,11 @@ export function TodayClient({
       {/* Streak-Style Category Filter Pills */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-3.5 no-scrollbar select-none">
         {[
-          { key: 'all', label: 'All', count: habits.length },
-          { key: 'focus', label: 'Focus', count: habits.filter((h) => getHabitCategory(h) === 'focus').length },
-          { key: 'body', label: 'Body', count: habits.filter((h) => getHabitCategory(h) === 'body').length },
-          { key: 'mind', label: 'Mind', count: habits.filter((h) => getHabitCategory(h) === 'mind').length },
-          { key: 'routine', label: 'Routine', count: habits.filter((h) => getHabitCategory(h) === 'routine').length },
+          { key: 'all', label: 'All', count: activeHabits.length },
+          { key: 'focus', label: 'Focus', count: activeHabits.filter((h) => getHabitCategory(h) === 'focus').length },
+          { key: 'body', label: 'Body', count: activeHabits.filter((h) => getHabitCategory(h) === 'body').length },
+          { key: 'mind', label: 'Mind', count: activeHabits.filter((h) => getHabitCategory(h) === 'mind').length },
+          { key: 'routine', label: 'Routine', count: activeHabits.filter((h) => getHabitCategory(h) === 'routine').length },
         ].map((cat) => (
           <button
             key={cat.key}
@@ -983,29 +1082,90 @@ export function TodayClient({
         {habits.length === 0 ? (
           <div
             style={{
-              padding: '36px 24px',
+              padding: '40px 24px',
               textAlign: 'center',
               border: '1px dashed var(--border)',
               borderRadius: 'var(--radius-lg)',
               backgroundColor: 'var(--surface)',
+              maxWidth: 440,
+              margin: '0 auto',
+              width: '100%',
             }}
           >
-            <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.875rem', color: 'var(--text-muted)', marginBottom: 16 }}>
-              No habits configured yet. Build your personal system.
-            </p>
-            <Link
-              href="/settings"
-              className="btn btn-primary"
+            <h3
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: '0.8125rem',
-                padding: '8px 18px',
+                fontFamily: 'var(--font-serif)',
+                fontSize: '1.375rem',
+                fontWeight: 400,
+                color: 'var(--text-main)',
+                marginBottom: 8,
               }}
             >
-              + Add Your First Habit
-            </Link>
+              Build Your Daily System
+            </h3>
+            <p
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.8125rem',
+                color: 'var(--text-muted)',
+                marginBottom: 20,
+                lineHeight: 1.5,
+              }}
+            >
+              You have no active habits yet. Start with our 13 curated discipline habits, or build your routine from scratch.
+            </p>
+
+            {seedError && (
+              <p
+                role="alert"
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  color: 'var(--accent-rose, #d95f4f)',
+                  marginBottom: 16,
+                }}
+              >
+                Error: {seedError}
+              </p>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+              <button
+                onClick={handleSeedDefaultHabits}
+                disabled={isSeeding}
+                className="btn btn-primary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  fontSize: '0.8125rem',
+                  padding: '10px 20px',
+                  width: '100%',
+                  maxWidth: 260,
+                  cursor: isSeeding ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {isSeeding ? 'Setting up habits...' : 'Start with the default habits'}
+              </button>
+
+              <Link
+                href="/settings"
+                className="btn btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.8125rem',
+                  padding: '10px 20px',
+                  width: '100%',
+                  maxWidth: 260,
+                  textDecoration: 'none',
+                }}
+              >
+                Start blank
+              </Link>
+            </div>
           </div>
         ) : filteredHabits.length === 0 ? (
           <div
@@ -1103,8 +1263,8 @@ export function TodayClient({
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {/* Mood & Energy in 2-col grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Mood & Energy in 1-col on mobile, 2-col on desktop */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div
             style={{
               padding: '16px 18px',

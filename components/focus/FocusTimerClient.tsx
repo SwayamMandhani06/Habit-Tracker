@@ -481,8 +481,8 @@ export function FocusTimerClient({ payload, initialHabitId }: Props) {
         maxWidth: '720px',
         paddingLeft: 'clamp(16px, 4vw, 32px)',
         paddingRight: 'clamp(16px, 4vw, 32px)',
-        paddingTop: '28px',
-        paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 80px)',
+        paddingTop: 'calc(28px + var(--safe-top))',
+        paddingBottom: 'calc(var(--safe-bottom) + 80px)',
       }}
     >
       {/* ── TOP HEADER / BREADCRUMB ────────────────────────────────────────── */}
@@ -602,10 +602,10 @@ export function FocusTimerClient({ payload, initialHabitId }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end min-w-0">
             {/* Show habit's progress today */}
             {selectedHabit && (
-              <div className="text-right font-mono text-xs">
+              <div className="text-right font-mono text-xs flex-shrink-0">
                 <span className="text-[10px] text-[var(--text-muted)] block">TODAY</span>
                 <span className="font-bold text-[var(--accent)]">
                   {selectedHabit.todayAmount}{' '}
@@ -620,7 +620,7 @@ export function FocusTimerClient({ payload, initialHabitId }: Props) {
               value={selectedHabitId ?? ''}
               disabled={sessionState !== null}
               onChange={(e) => setSelectedHabitId(e.target.value || null)}
-              className="font-mono text-xs px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)]"
+              className="font-mono text-xs px-3 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] min-w-0 max-w-[180px] sm:max-w-none truncate"
             >
               <option value="">(None / General Focus)</option>
               {habits.map((h) => (

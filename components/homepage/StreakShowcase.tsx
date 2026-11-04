@@ -55,7 +55,7 @@ function AmountHabitPhone() {
           </div>
           <span className="font-mono text-xs font-bold">Deep Work</span>
         </div>
-        <span className="font-mono text-[9px] px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[var(--accent)] font-bold">
+        <span className="font-mono text-[9px] px-2 py-0.5 rounded-full bg-[var(--accent)]/15 text-[#344633] dark:text-[#8BA888] font-bold">
           Daily Goal
         </span>
       </div>
@@ -205,7 +205,7 @@ function WeekMatrixPhone() {
           <span className="font-mono text-xs font-bold block">Week Matrix</span>
           <span className="font-mono text-[9px] text-[var(--text-muted)]">Oct 26 – Nov 01</span>
         </div>
-        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[var(--accent)]">
+        <span className="font-mono text-[9px] font-bold px-2 py-0.5 rounded bg-[var(--accent)]/15 text-[#344633] dark:text-[#8BA888]">
           7-DAY VIEW
         </span>
       </div>
@@ -245,13 +245,12 @@ function WeekMatrixPhone() {
                 </span>
               </div>
 
-              {/* 7 Check Squares */}
+              {/* 7 Check Squares (Illustrative demo matrix, non-interactive to preserve 44px tap targets) */}
               <div className="flex items-center gap-1">
                 {row.days.map((done, dayIdx) => (
-                  <button
+                  <div
                     key={dayIdx}
-                    onClick={() => toggleDay(row.id, dayIdx)}
-                    className={`w-5 h-5 rounded-md flex items-center justify-center transition-all cursor-pointer ${
+                    className={`w-5 h-5 rounded-md flex items-center justify-center transition-all select-none ${
                       done
                         ? 'text-white shadow-xs scale-100'
                         : 'bg-black/5 dark:bg-white/5 border border-[var(--border)] opacity-40'
@@ -259,10 +258,9 @@ function WeekMatrixPhone() {
                     style={{
                       backgroundColor: done ? row.color : undefined,
                     }}
-                    aria-label={`${row.title} day ${dayIdx + 1}`}
                   >
                     {done && <Check size={11} strokeWidth={3} />}
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -561,7 +559,7 @@ function FocusClockPhone() {
       <div className="flex-1 px-4 py-3 flex flex-col items-center justify-between overflow-y-auto no-scrollbar">
         {/* Linked Habit Banner */}
         <div className="text-center">
-          <span className="font-mono text-[9px] uppercase tracking-widest text-[var(--accent)] font-bold">
+          <span className="font-mono text-[9px] uppercase tracking-widest text-[#344633] dark:text-[#8BA888] font-bold">
             LOGGING TO: DEEP WORK
           </span>
           <p className="font-serif italic text-sm text-[var(--text-muted)]">
@@ -613,7 +611,7 @@ function FocusClockPhone() {
               <span className="font-mono text-3xl font-extrabold tracking-tight">
                 {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
               </span>
-              <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--accent)] font-bold">
+              <span className="font-mono text-[9px] uppercase tracking-wider text-[#344633] dark:text-[#8BA888] font-bold">
                 DEEP WORK
               </span>
             </div>
@@ -793,16 +791,16 @@ export function StreakShowcase() {
             {/* Caption & Description Underneath */}
             <div className="mt-4 px-2">
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-mono text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[var(--accent)]/10 text-[var(--accent)]">
+                <span className="font-mono text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-[var(--accent)]/10 text-[#344633] dark:text-[#8BA888]">
                   {screen.tag}
                 </span>
                 <span className="font-mono text-[9px] text-[var(--text-muted)]">
                   0{idx + 1} / 05
                 </span>
               </div>
-              <h4 className="font-mono text-sm font-bold text-[var(--text-primary)]">
+              <div className="font-mono text-sm font-bold text-[var(--text-primary)]">
                 {screen.title}
-              </h4>
+              </div>
               <p className="font-serif italic text-xs text-[var(--text-muted)] mt-1 leading-snug">
                 {screen.subtitle}
               </p>

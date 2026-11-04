@@ -135,16 +135,16 @@ export function MonthlyReviewClient({ data }: Props) {
         </div>
 
         {/* Month Title & View/Write Clean Pill Toggle */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1 min-w-0">
+          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 min-w-0 w-full sm:w-auto">
             <button
               onClick={prevMonth}
               aria-label="Previous Month"
-              className="w-10 h-10 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-raised)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer active:scale-95 shadow-2xs"
+              className="w-10 h-10 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-raised)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer active:scale-95 shadow-2xs flex-shrink-0"
             >
               <ChevronLeft size={18} />
             </button>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold font-mono tracking-tight text-[var(--text-primary)] whitespace-nowrap">
+            <h1 className="text-base sm:text-2xl md:text-3xl font-bold font-mono tracking-tight text-[var(--text-primary)] text-center min-w-0 truncate">
               <span className="text-[var(--text-muted)] font-normal">[ </span>
               {data.monthName} {data.year}
               <span className="text-[var(--text-muted)] font-normal"> ]</span> REVIEW
@@ -152,7 +152,7 @@ export function MonthlyReviewClient({ data }: Props) {
             <button
               onClick={nextMonth}
               aria-label="Next Month"
-              className="w-10 h-10 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-raised)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer active:scale-95 shadow-2xs"
+              className="w-10 h-10 flex items-center justify-center rounded-[6px] border border-[var(--border)] hover:bg-[var(--surface-raised)] transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer active:scale-95 shadow-2xs flex-shrink-0"
             >
               <ChevronRight size={18} />
             </button>

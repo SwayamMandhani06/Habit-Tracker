@@ -10,6 +10,7 @@ import { toggleHabitCompletionAction } from '@/actions/completion.actions'
 import { getMonthDateRange } from '@/lib/date'
 import { getHabitColorVar } from '@/lib/habit-theme'
 import { getWeekdayMon1, addDays } from '@/lib/stats/habit-math'
+import { isHabitActiveOnDate, computeDailyScore } from '@/lib/scoring'
 import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet'
 
 interface Props {
@@ -214,7 +215,7 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1)
 
   return (
-    <div className="page-container" style={{ paddingBottom: 64 }}>
+    <div className="page-container" style={{ paddingBottom: 'calc(64px + var(--safe-bottom))' }}>
       {/* Breadcrumb & Title */}
       <motion.p
         className="text-path"
@@ -330,7 +331,7 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
               handleMobileNextWeek()
             }
           }}
-          className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden shadow-2xs touch-pan-y"
+          className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-x-auto no-scrollbar shadow-2xs touch-pan-y"
         >
           {/* Day Headers */}
           <div className="grid grid-cols-[100px_repeat(7,1fr)] items-center border-b border-[var(--border)] bg-[var(--surface-raised)]/70 py-2.5 px-2 font-mono text-[10px]">
@@ -536,12 +537,10 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
               for (let d = 1; d <= daysInMonth; d++) {
                 const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
                 if (dateStr > today) continue
-                if (habitCreatedDate && dateStr < habitCreatedDate) continue
-                if (habitArchivedDate && dateStr > habitArchivedDate) continue
 
                 const entry = entryMap.get(dateStr)
                 const isSkipped = entry ? skipMap.get(`${entry.id}__${habit.id}`) === true : false
-                if (isSkipped) continue
+                if (!isHabitActiveOnDate(habit, dateStr, isSkipped)) continue
 
                 activeDays++
                 if (entry && compMap.get(`${entry.id}__${habit.id}`) === true) {
@@ -787,8 +786,25 @@ export function MonthlyGrid({ year, month, habits, entries, completionData, scor
 
               {days.map((d) => {
                 const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-                const score = scoreMap.get(dateStr)
-                const pct = score ? Math.round(Number(score.completion_pct)) : null
+                const entry = entryMap.get(dateStr)
+                let pct: number | null = null
+
+                if (dateStr <= today) {
+                  const dayComps: Record<string, { habit_id: string; is_completed: boolean; is_skipped?: boolean }> = {}
+                  for (const h of habits) {
+                    const key = entry ? `${entry.id}__${h.id}` : ''
+                    const isDone = key ? compMap.get(key) === true : false
+                    const isSkipped = key ? skipMap.get(key) === true : false
+                    dayComps[h.id] = { habit_id: h.id, is_completed: isDone, is_skipped: isSkipped }
+                  }
+                  const scoreRes = computeDailyScore({
+                    date: dateStr,
+                    habits,
+                    completionsMap: dayComps,
+                  })
+                  pct = scoreRes.completionPct
+                }
+
                 const isToday = dateStr === today
 
                 return (

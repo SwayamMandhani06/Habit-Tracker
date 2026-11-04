@@ -3,10 +3,21 @@
 import { useEffect, useState } from 'react'
 import { motion, type Variants } from 'framer-motion'
 import Link from 'next/link'
+import dynamic from 'next/dynamic'
 import type { DashboardStats } from '@/lib/supabase/types'
-import { BarChart, Bar, XAxis, ResponsiveContainer } from 'recharts'
 import { CatCompanion } from '@/components/cat/CatCompanion'
 import { ArrowRight } from 'lucide-react'
+
+// Lazy-load Recharts sparkline code with next/dynamic
+const SparklineChart = dynamic(
+  () => import('./SparklineChart').then((mod) => mod.SparklineChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full rounded bg-[var(--surface-raised)] animate-pulse" />
+    ),
+  }
+)
 
 interface Props {
   stats: DashboardStats
@@ -85,7 +96,14 @@ export function DashboardClient({ stats, date }: Props) {
   const strokeDashoffset = circumference - (Math.min(100, Math.max(0, stats.todayPct)) / 100) * circumference
 
   return (
-    <div className="page-container" style={{ maxWidth: 880, margin: '0 auto', paddingBottom: 64 }}>
+    <div
+      className="page-container"
+      style={{
+        maxWidth: 880,
+        margin: '0 auto',
+        paddingBottom: 'calc(80px + var(--safe-bottom) + 16px)',
+      }}
+    >
       {/* ── 1. PAGE HEADER ─────────────────────────────────────────────── */}
       <motion.div
         custom={0}
@@ -172,52 +190,48 @@ export function DashboardClient({ stats, date }: Props) {
         initial="hidden"
         animate="visible"
         variants={sectionVariants}
-        whileHover={{ y: -2 }}
+        className="rounded-2xl p-4 sm:p-5 md:p-0 md:bg-transparent md:border-none md:shadow-none bg-[var(--surface)] border border-[var(--border)] mb-7 transition-all"
         style={{
-          backgroundColor: 'var(--surface)',
-          border: '1px solid',
-          borderColor: isPerfectDay ? 'var(--accent)' : 'var(--border)',
-          borderRadius: 'var(--radius-lg)',
-          padding: '28px 24px',
-          marginBottom: 28,
-          boxShadow: isPerfectDay ? '0 0 0 1px var(--accent), 0 0 16px var(--accent-glow)' : 'none',
-          transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
+          boxShadow: isPerfectDay ? '0 0 0 1px var(--accent), 0 0 16px var(--accent-glow)' : undefined,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
+        {/* On mobile: compact row with percent & ring side by side. On desktop: spacious editorial row */}
+        <div className="flex items-center justify-between gap-4">
           {/* Left: Completion stats */}
-          <div>
-            <span className="section-label" style={{ display: 'block', marginBottom: 8 }}>
+          <div className="min-w-0 flex-1">
+            <span className="section-label block mb-1">
               TODAY&apos;S PROGRESS
             </span>
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 'clamp(3rem, 6.5vw, 4.5rem)',
+                fontSize: 'clamp(2.75rem, 6vw, 4.5rem)',
                 fontWeight: 800,
                 color: 'var(--accent)',
                 lineHeight: 1,
                 letterSpacing: '-0.04em',
-                marginBottom: 10,
+                marginBottom: 6,
               }}
+              className="tabular-nums"
             >
               {displayedTodayPct}
-              <span style={{ fontSize: '1.75rem', fontWeight: 600, marginLeft: 2 }}>%</span>
+              <span style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.75rem)', fontWeight: 600, marginLeft: 2 }}>%</span>
             </div>
             <p
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '0.9rem',
+                fontSize: '0.85rem',
                 color: 'var(--text-muted)',
                 letterSpacing: '0.02em',
               }}
+              className="truncate"
             >
               {stats.todayScore} of {stats.todayTotal} habits complete today
             </p>
           </div>
 
           {/* Right: Progress Ring (SVG animated stroke) */}
-          <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+          <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
             <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
               {/* Background circle track */}
               <circle
@@ -265,7 +279,7 @@ export function DashboardClient({ stats, date }: Props) {
         {/* Thin full-width progress bar below */}
         <div
           style={{
-            marginTop: 22,
+            marginTop: 16,
             height: 4,
             backgroundColor: 'var(--border)',
             borderRadius: 99,
@@ -337,22 +351,7 @@ export function DashboardClient({ stats, date }: Props) {
           </div>
 
           <div style={{ width: '100%', height: 90 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sparklineData} margin={{ top: 8, right: 6, left: 6, bottom: 0 }}>
-                <XAxis
-                  dataKey="day"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fill: 'var(--text-muted)', fontSize: 11, fontFamily: 'var(--font-mono)' }}
-                />
-                <Bar
-                  dataKey="pct"
-                  fill="var(--accent)"
-                  radius={[2, 2, 0, 0]}
-                  maxBarSize={18}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            <SparklineChart data={sparklineData} />
           </div>
         </div>
 

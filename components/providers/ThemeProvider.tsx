@@ -26,6 +26,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const resolved = stored ?? (systemDark ? 'dark' : 'light')
     setTheme(resolved)
     document.documentElement.setAttribute('data-theme', resolved)
+    document.documentElement.classList.toggle('dark', resolved === 'dark')
   }, [])
 
   const toggleTheme = useCallback(() => {
@@ -33,6 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       const next = prev === 'dark' ? 'light' : 'dark'
       localStorage.setItem('theme', next)
       document.documentElement.setAttribute('data-theme', next)
+      document.documentElement.classList.toggle('dark', next === 'dark')
       return next
     })
   }, [])

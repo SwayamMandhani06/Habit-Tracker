@@ -488,9 +488,12 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
 
           {/* Name */}
           <span style={{
-            flex: 1, fontSize: '0.9375rem', fontWeight: 500,
+            flex: 1, minWidth: 0, fontSize: '0.9375rem', fontWeight: 500,
             color: habit.is_archived ? 'var(--ink-tertiary)' : 'var(--ink-primary)',
             letterSpacing: '-0.01em',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}>
             {habit.name}
             {habit.is_archived && <span style={{ fontSize: '0.75rem', color: 'var(--ink-tertiary)', marginLeft: '8px' }}>(Archived)</span>}
@@ -499,6 +502,7 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
           {/* Type badge */}
           {!habit.is_archived && (
             <span style={{
+              flexShrink: 0,
               fontSize: '0.65rem', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase',
               color: habit.type === 'checklist' ? 'var(--accent)' : habit.type === 'amount' ? getHabitColorVar(habit.color) : 'var(--ink-tertiary)',
               background: habit.type === 'checklist' ? 'var(--accent-glow)' : 'var(--bg-surface-3)',
@@ -510,7 +514,7 @@ function SortableHabitItem({ habit, onUpdate, onArchive }: {
 
           {/* Actions */}
           {!habit.is_archived && (
-            <div style={{ display: 'flex', gap: '4px' }}>
+            <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
               <button className="btn-icon" onClick={() => setEditing(true)} aria-label="Edit habit configuration"><Pencil size={15} /></button>
               {habit.type === 'checklist' && (
                 <button className="btn-icon" onClick={() => setExpanded(e => !e)} aria-label="Expand subitems">

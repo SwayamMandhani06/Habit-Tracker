@@ -2,6 +2,9 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/providers/ThemeProvider'
+import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister'
+import { OfflineSyncIndicator } from '@/components/ui/OfflineSyncIndicator'
+import { AuthListener } from '@/components/providers/AuthListener'
 
 export const metadata: Metadata = {
   title: '1% Better',
@@ -35,11 +38,30 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1A1815" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F7F5F2" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap"
           rel="stylesheet"
+        />
+        {/* Anti-flash theme script: syncs data-theme and dark class immediately */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var stored = localStorage.getItem('theme');
+                  var isDark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  var t = isDark ? 'dark' : 'light';
+                  document.documentElement.setAttribute('data-theme', t);
+                  if (isDark) document.documentElement.classList.add('dark');
+                  else document.documentElement.classList.remove('dark');
+                } catch(e) {}
+              })();
+            `,
+          }}
         />
         {/* Client Timezone Sync: prevents midnight drift for non-UTC users */}
         <script
@@ -62,7 +84,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <ServiceWorkerRegister />
+          <OfflineSyncIndicator />
+          <AuthListener />
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )

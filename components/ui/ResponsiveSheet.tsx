@@ -100,7 +100,7 @@ export function ResponsiveSheet({
             className={`relative z-10 w-full md:max-w-xl md:rounded-3xl rounded-t-[28px] border border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] shadow-2xl flex flex-col overflow-hidden ${className}`}
             style={{
               maxHeight: 'min(90dvh, 780px)',
-              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+              paddingBottom: 'calc(12px + var(--safe-bottom))',
             }}
           >
             {/* Mobile Drag Handle */}

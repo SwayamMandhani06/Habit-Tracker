@@ -22,6 +22,7 @@ import {
 import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet'
 import { useTheme } from '@/components/providers/ThemeProvider'
 import { createClient } from '@/lib/supabase/client'
+import { clearOfflineQueue } from '@/lib/offline-queue'
 
 export function BottomTabBar() {
   const pathname = usePathname()
@@ -31,6 +32,20 @@ export function BottomTabBar() {
 
   const handleSignOut = async () => {
     setMoreSheetOpen(false)
+
+    // 1. Explicit sign-out clears offline queue
+    clearOfflineQueue()
+
+    // 2. Clear runtime caches
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      try {
+        const keys = await window.caches.keys()
+        await Promise.all(keys.map((k) => window.caches.delete(k)))
+      } catch (err) {
+        console.warn('[BottomTabBar] Failed to clear caches on sign out:', err)
+      }
+    }
+
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')

@@ -3,16 +3,7 @@
 import React, { useMemo } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-} from 'recharts'
+import dynamic from 'next/dynamic'
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +14,17 @@ import {
   TrendingDown,
   Sparkles,
 } from 'lucide-react'
+
+// Lazy-load Recharts line chart with next/dynamic
+const InsightsLineChart = dynamic(
+  () => import('./InsightsLineChart').then((mod) => mod.InsightsLineChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[220px] rounded-xl bg-[var(--surface-raised)] border border-[var(--border)] animate-pulse" />
+    ),
+  }
+)
 import type { InsightsData } from '@/lib/db/insights'
 import { renderHabitIcon, getHabitColorVar } from '@/lib/habit-theme'
 import { calculateWeekdayBreakdown, type HabitRecord } from '@/lib/stats/habit-math'
@@ -231,40 +233,7 @@ export function InsightsClient({ data }: Props) {
             </div>
 
             <div className="w-full h-[220px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={lineChartData} margin={{ top: 12, right: 16, left: -22, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
-                  <XAxis
-                    dataKey="day"
-                    tickLine={false}
-                    axisLine={{ stroke: 'var(--border)' }}
-                    tick={{ fontSize: 10, fontFamily: 'var(--font-mono)', fill: 'var(--text-muted)' }}
-                  />
-                  <YAxis
-                    domain={[0, 100]}
-                    unit="%"
-                    tickLine={false}
-                    axisLine={{ stroke: 'var(--border)' }}
-                    tick={{ fontSize: 10, fontFamily: 'var(--font-mono)', fill: 'var(--text-muted)' }}
-                    ticks={[0, 25, 50, 75, 100]}
-                  />
-                  <Tooltip
-                    contentStyle={tooltipStyle}
-                    formatter={(val: unknown) => [typeof val === 'number' ? `${val}%` : '—', 'Completion']}
-                    labelFormatter={(day: unknown) => `${data.monthName} ${day}`}
-                  />
-                  <ReferenceLine y={80} stroke="var(--accent)" strokeDasharray="4 4" strokeOpacity={0.7} />
-                  <Line
-                    type="monotone"
-                    dataKey="pct"
-                    stroke="var(--accent)"
-                    strokeWidth={2.5}
-                    dot={{ r: 2.5, fill: 'var(--accent)', strokeWidth: 0 }}
-                    activeDot={{ r: 5, fill: 'var(--accent)', stroke: 'var(--bg)', strokeWidth: 2 }}
-                    connectNulls={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <InsightsLineChart data={lineChartData} monthName={data.monthName} />
             </div>
 
             <div className="mt-3 pt-3 border-t border-[var(--border)] flex items-center justify-between text-xs font-mono text-[var(--text-muted)]">

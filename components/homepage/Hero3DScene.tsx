@@ -97,7 +97,7 @@ export function Hero3DScene() {
       unit: 'glasses',
       targetZ: 65,
       xOffset: -255, // pops out to the left over phone rim
-      yPos: 155,
+      yPos: 135,
     },
     {
       id: 'gym',
@@ -112,7 +112,7 @@ export function Hero3DScene() {
       unit: 'session',
       targetZ: 90,
       xOffset: -248,
-      yPos: 242,
+      yPos: 245,
     },
     {
       id: 'deepwork',
@@ -127,7 +127,7 @@ export function Hero3DScene() {
       unit: 'min',
       targetZ: 115,
       xOffset: -258,
-      yPos: 329,
+      yPos: 328,
       actionLabel: '+15m',
     },
     {
@@ -143,10 +143,19 @@ export function Hero3DScene() {
       unit: 'steps',
       targetZ: 135,
       xOffset: -252,
-      yPos: 416,
+      yPos: 412,
       actionLabel: '+1 step',
     },
   ])
+
+  const [realDate, setRealDate] = useState('')
+
+  useEffect(() => {
+    try {
+      const d = new Date()
+      setRealDate(new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric' }).format(d))
+    } catch {}
+  }, [])
 
   const totalDone = habits.filter((h) => h.completed).length
   const completionPct = Math.round((totalDone / habits.length) * 100)
@@ -337,7 +346,7 @@ export function Hero3DScene() {
             transform: 'translateX(-50%) translateZ(-50px) rotateX(90deg)',
             left: '50%',
             bottom: -30,
-            width: 350,
+            width: 'min(310px, 90vw)',
             height: 100,
             borderRadius: '50%',
             background:
@@ -366,8 +375,8 @@ export function Hero3DScene() {
             className="relative w-full h-full rounded-[38px] overflow-hidden flex flex-col bg-[var(--surface)] text-[var(--text-primary)] border border-black/30 dark:border-white/10"
             style={{
               backgroundImage:
-                'radial-gradient(circle, var(--dot-color) 1px, transparent 1px)',
-              backgroundSize: '18px 18px',
+                'radial-gradient(circle, var(--dot-color) 1.5px, transparent 1.5px)',
+              backgroundSize: '24px 24px',
             }}
           >
             {/* Dynamic Island */}
@@ -404,15 +413,15 @@ export function Hero3DScene() {
                 <p className="font-mono text-[9px] uppercase tracking-[0.2em] font-bold text-[var(--accent)]">
                   TODAY’S RITUAL
                 </p>
-                <h3 className="font-serif italic text-xl font-normal leading-tight text-[var(--text-primary)]">
-                  Friday, Oct 30
-                </h3>
+                <div className="font-serif italic text-xl font-normal leading-tight text-[var(--text-primary)]">
+                  {realDate || "Today’s Ritual"}
+                </div>
               </div>
               <div className="text-right">
                 <span className="font-mono text-base font-extrabold tracking-tight text-[var(--text-primary)]">
                   {completionPct}%
                 </span>
-                <p className="font-mono text-[9px] text-[var(--text-muted)] tracking-wider">
+                <p className="font-mono text-[9px] text-[var(--ink-secondary)] tracking-wider">
                   {totalDone}/4 DONE
                 </p>
               </div>
@@ -426,8 +435,8 @@ export function Hero3DScene() {
                     key={day.num}
                     className={`flex flex-col items-center justify-center w-7 py-1 rounded-md text-[10px] font-mono transition-all ${
                       day.active
-                        ? 'bg-[var(--accent)] text-white font-bold shadow-xs'
-                        : 'text-[var(--text-muted)]'
+                        ? 'bg-[var(--accent)] text-[var(--accent-fg)] font-bold shadow-xs'
+                        : 'text-[var(--ink-secondary)]'
                     }`}
                   >
                     <span className="text-[9px] opacity-80">{day.label}</span>
@@ -439,11 +448,11 @@ export function Hero3DScene() {
 
             {/* Filter Pills row */}
             <div className="px-3.5 py-1 flex items-center justify-center gap-1.5 border-b border-[var(--border)]/40 text-[9px] font-mono">
-              <span className="px-2 py-0.5 rounded-full text-[var(--text-muted)]">Morning</span>
+              <span className="px-2 py-0.5 rounded-full text-[var(--ink-secondary)]">Morning</span>
               <span className="px-2.5 py-0.5 rounded-full bg-[var(--surface-raised)] text-[var(--text-primary)] font-semibold border border-[var(--border)]">
                 All Day
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[var(--text-muted)]">Evening</span>
+              <span className="px-2 py-0.5 rounded-full text-[var(--ink-secondary)]">Evening</span>
             </div>
 
             {/* In-Screen Habit Canvas (Rich background slots underlying the 3D pop-outs) */}
@@ -464,7 +473,7 @@ export function Hero3DScene() {
                       <div className="font-mono text-xs font-semibold text-[var(--text-primary)]">
                         {h.title}
                       </div>
-                      <div className="font-mono text-[10px] text-[var(--text-muted)]">
+                      <div className="font-mono text-[10px] text-[var(--ink-secondary)]">
                         {h.subtitle}
                       </div>
                     </div>
@@ -485,7 +494,7 @@ export function Hero3DScene() {
             {/* In-Phone Bottom Navigation Bar with Center Floating '+' Button */}
             <div
               aria-hidden="true"
-              className="relative px-5 py-2.5 border-t border-[var(--border)] bg-[var(--surface)] flex items-center justify-between text-[var(--text-muted)] text-[10px] font-mono"
+              className="relative px-5 py-2.5 border-t border-[var(--border)] bg-[var(--surface)] flex items-center justify-between text-[var(--ink-secondary)] text-[10px] font-mono"
             >
               <div className="flex flex-col items-center text-[var(--accent)] font-bold">
                 <CheckSquare size={14} />
@@ -496,7 +505,7 @@ export function Hero3DScene() {
                 <span className="mt-0.5">Grid</span>
               </div>
               {/* Floating Center '+' Button */}
-              <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-white flex items-center justify-center shadow-md -mt-3 border-2 border-[var(--surface)]">
+              <div className="w-8 h-8 rounded-full bg-[var(--accent)] text-[var(--accent-fg)] flex items-center justify-center shadow-md -mt-3 border-2 border-[var(--surface)]">
                 <Plus size={16} strokeWidth={2.5} />
               </div>
               <div className="flex flex-col items-center">

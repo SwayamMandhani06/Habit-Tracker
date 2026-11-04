@@ -3,8 +3,9 @@
 import React, { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, Plus, Minus, ChevronDown, Clock, Ban, Play } from 'lucide-react'
+import { Check, Plus, Minus, ChevronDown, Clock, Ban, Play, MoreHorizontal, ArrowRight } from 'lucide-react'
 import { renderHabitIcon, getHabitColorVar } from '@/lib/habit-theme'
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet'
 
 export interface HabitCardViewProps {
   habitId?: string
@@ -103,7 +104,12 @@ export function HabitCardView({
   const [isEditingAmount, setIsEditingAmount] = useState(false)
   const [amountInputVal, setAmountInputVal] = useState(String(currentAmount))
   const [subitemsExpanded, setSubitemsExpanded] = useState(false)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const isTimeHabit = Boolean(
+    unit && ['min', 'mins', 'minute', 'minutes', 'hours', 'hour', 'hr', 'hrs', 'h', 'm'].includes(unit.toLowerCase().trim())
+  )
 
   useEffect(() => {
     if (!isEditingAmount) {
@@ -159,20 +165,9 @@ export function HabitCardView({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-pressed={ariaPressed ?? completed}
-      aria-label={`${title}. ${completed ? 'Completed' : 'Not completed'}.`}
       onClick={handleCardClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          if (!isEditingAmount && e.target === e.currentTarget) {
-            e.preventDefault()
-            handleCardClick(e as any)
-          }
-        }
-      }}
-      className={`group relative text-left select-none outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 transition-all ${className}`}
+      data-habit-id={habitId}
+      className={`habit-card group relative text-left select-none outline-none transition-all ${className}`}
       style={{
         width: '100%',
         minHeight: 64,
@@ -188,318 +183,445 @@ export function HabitCardView({
       {/* Optical depth shadow layer underneath (no box-shadow animation) */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -inset-2 rounded-2xl transition-opacity duration-300"
+        className="pointer-events-none absolute inset-0 rounded-2xl transition-opacity duration-300"
         style={{
           background:
             'radial-gradient(ellipse 90% 75% at 50% 65%, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0.15) 45%, transparent 75%)',
           opacity: isHovered ? 0.75 : 0.38,
+          filter: 'blur(6px)',
           zIndex: -1,
         }}
       />
 
-      {/* Main Row */}
-      <div className="flex items-center justify-between gap-3">
-        {/* Left: 36px Tinted Icon + Name & Subtitle */}
-        <div className="flex items-center gap-3.5 min-w-0 flex-1">
-          <div
-            aria-hidden="true"
-            className="flex items-center justify-center rounded-[10px] flex-shrink-0 transition-transform group-hover:scale-105"
-            style={{
-              width: 36,
-              height: 36,
-              backgroundColor: `color-mix(in srgb, ${resolvedColor} 15%, transparent)`,
-              color: resolvedColor,
-              border: `1px solid color-mix(in srgb, ${resolvedColor} 25%, transparent)`,
-            }}
-          >
-            {resolvedIcon}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {habitId ? (
-                <Link
-                  href={`/habits/${habitId}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="truncate leading-snug hover:underline transition-colors"
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 600,
-                    fontSize: 13.5,
-                    color: completed ? 'var(--text-muted)' : 'var(--text-primary)',
-                    textDecorationLine: completed ? 'line-through' : 'none',
-                    letterSpacing: '-0.015em',
-                    margin: 0,
-                  }}
-                >
-                  {title}
-                </Link>
-              ) : (
-                <h4
-                  className="truncate leading-snug"
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontWeight: 600,
-                    fontSize: 13.5,
-                    color: completed ? 'var(--text-muted)' : 'var(--text-primary)',
-                    textDecorationLine: completed ? 'line-through' : 'none',
-                    letterSpacing: '-0.015em',
-                    margin: 0,
-                  }}
-                >
-                  {title}
-                </h4>
-              )}
-
-              {isSkipped && (
-                <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] font-bold">
-                  SKIPPED
-                </span>
-              )}
+      {/* ── CARD LAYOUT (Two-row grid below 480px / mobile) ── */}
+      <div className="w-full min-w-0">
+        {/* ROW 1: 36px Icon chip, Name (wraps to 2 lines, never hidden), Right primary controls / More button */}
+        <div className="flex items-center justify-between gap-2.5 min-w-0 w-full">
+          {/* Left: 36px Tinted Icon + Name & Subtitle */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            <div
+              aria-hidden="true"
+              className="flex items-center justify-center rounded-[10px] flex-shrink-0 transition-transform group-hover:scale-105"
+              style={{
+                width: 36,
+                height: 36,
+                backgroundColor: `color-mix(in srgb, ${resolvedColor} 15%, transparent)`,
+                color: resolvedColor,
+                border: `1px solid color-mix(in srgb, ${resolvedColor} 25%, transparent)`,
+              }}
+            >
+              {resolvedIcon}
             </div>
 
-            {subtitle && (
-              <p
-                className="truncate"
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  color: 'var(--text-muted)',
-                  letterSpacing: '0.01em',
-                  margin: '2px 0 0 0',
-                }}
-              >
-                {subtitle}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Right Interaction Controls */}
-        <div className="flex-shrink-0 flex items-center gap-2">
-          {/* 5-Day Strip (Minimal Mode) */}
-          {minimalMode && recentDays.length > 0 && (
-            <div className="flex items-center gap-1.5 pr-1" onClick={(e) => e.stopPropagation()}>
-              {recentDays.map((d) => {
-                const dayDone = dayCompletions[d.date] ?? false
-                return (
-                  <button
-                    key={d.date}
-                    type="button"
-                    onClick={() => onToggleDay && onToggleDay(d.date)}
-                    title={`${d.dayLabel} ${d.date}: ${dayDone ? 'Completed' : 'Incomplete'}`}
-                    className={`w-6 h-6 sm:w-7 sm:h-7 rounded-md font-mono text-[10px] font-bold transition-all flex items-center justify-center ${
-                      dayDone
-                        ? 'text-white shadow-xs'
-                        : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] hover:border-[var(--accent)]'
-                    }`}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {habitId ? (
+                  <Link
+                    href={`/habits/${habitId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="line-clamp-2 leading-snug hover:underline transition-colors font-mono font-semibold text-[13.5px] break-words"
                     style={{
-                      backgroundColor: dayDone ? resolvedColor : undefined,
+                      color: completed ? 'var(--text-muted)' : 'var(--text-primary)',
+                      textDecorationLine: completed ? 'line-through' : 'none',
+                      letterSpacing: '-0.015em',
+                      margin: 0,
                     }}
                   >
-                    {dayDone ? <Check size={12} strokeWidth={3} /> : d.dayNum}
-                  </button>
-                )
-              })}
-            </div>
-          )}
+                    {title}
+                  </Link>
+                ) : (
+                  <span
+                    className="block line-clamp-2 leading-snug font-mono font-semibold text-[13.5px] break-words"
+                    style={{
+                      color: completed ? 'var(--text-muted)' : 'var(--text-primary)',
+                      textDecorationLine: completed ? 'line-through' : 'none',
+                      letterSpacing: '-0.015em',
+                      margin: 0,
+                    }}
+                  >
+                    {title}
+                  </span>
+                )}
 
-          {/* Amount Steppers: [ - ] "6 / 8 glasses" [ + ] (or legacy yes/no row if targetAmount === null) */}
-          {variant === 'amount' && (
-            targetAmount === null ? (
-              <div
+                {isSkipped && (
+                  <span className="font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)] font-bold flex-shrink-0">
+                    SKIPPED
+                  </span>
+                )}
+              </div>
+
+              {subtitle && (
+                <p
+                  className="line-clamp-1 font-mono text-[11px] text-[var(--text-muted)] mt-0.5 truncate"
+                  style={{ letterSpacing: '0.01em' }}
+                >
+                  {subtitle}
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* Row 1 Right: Controls */}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {/* 5-Day Strip (Minimal Mode) */}
+            {minimalMode && recentDays.length > 0 && (
+              <div className="hidden sm:flex items-center gap-1.5 pr-1" onClick={(e) => e.stopPropagation()}>
+                {recentDays.map((d) => {
+                  const dayDone = dayCompletions[d.date] ?? false
+                  return (
+                    <button
+                      key={d.date}
+                      type="button"
+                      onClick={() => onToggleDay && onToggleDay(d.date)}
+                      title={`${d.dayLabel} ${d.date}: ${dayDone ? 'Completed' : 'Incomplete'}`}
+                      className={`w-7 h-7 rounded-md font-mono text-[10px] font-bold transition-all flex items-center justify-center ${
+                        dayDone
+                          ? 'text-white shadow-xs'
+                          : 'bg-[var(--surface)] text-[var(--text-muted)] border border-[var(--border)]'
+                      }`}
+                      style={{ backgroundColor: dayDone ? resolvedColor : undefined }}
+                    >
+                      {dayDone ? <Check size={12} strokeWidth={3} /> : d.dayNum}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Checkbox Variant: 44px touch target */}
+            {variant === 'checkbox' && (
+              <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation()
-                  if (onToggle) onToggle()
+                  onToggle?.()
                 }}
-                className="px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                aria-label={`Toggle ${title}`}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center transition-all cursor-pointer select-none active:scale-95"
+                style={{
+                  backgroundColor: completed ? resolvedColor : 'var(--surface)',
+                  border: `1.5px solid ${completed ? resolvedColor : 'var(--border)'}`,
+                  color: '#FFFFFF',
+                }}
+              >
+                {completed && <Check size={18} strokeWidth={3} />}
+              </button>
+            )}
+
+            {/* Checklist Variant: Subitems expansion toggle with 44px touch target */}
+            {variant === 'checklist' && subitems.length > 0 && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSubitemsExpanded((prev) => !prev)
+                }}
+                aria-expanded={subitemsExpanded}
+                aria-label={`Toggle sub-items for ${title}`}
+                className="min-h-[44px] px-2.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] flex items-center gap-1.5 text-xs font-mono font-bold cursor-pointer transition-all active:scale-95"
+              >
+                <span className="text-[var(--text-muted)] tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                  {subitems.filter((s) => s.completed).length}/{subitems.length}
+                </span>
+                <div
+                  className="transition-transform duration-200"
+                  style={{ transform: subitemsExpanded ? 'rotate(180deg)' : 'none' }}
+                >
+                  <ChevronDown size={14} className="text-[var(--text-muted)]" />
+                </div>
+              </button>
+            )}
+
+            {/* Legacy Yes/No Amount Variant */}
+            {variant === 'amount' && targetAmount === null && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggle?.()
+                }}
+                className="min-h-[44px] px-3 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
                 style={{
                   backgroundColor: completed ? resolvedColor : 'var(--surface)',
                   borderColor: completed ? resolvedColor : 'var(--border)',
                   color: completed ? '#FFFFFF' : 'var(--text-muted)',
                 }}
-                title="Legacy record (Yes/No)"
               >
-                {completed ? <Check size={13} strokeWidth={2.5} /> : null}
+                {completed && <Check size={13} strokeWidth={2.5} />}
                 <span>{completed ? 'Done' : 'Pending'}</span>
-              </div>
-            ) : (
-              <>
+              </button>
+            )}
+
+            {/* Desktop-only: Inline Stepper on large screens (>= 640px) */}
+            {variant === 'amount' && targetAmount !== null && (
+              <div className="hidden sm:flex items-center gap-2">
                 <div
                   className="flex items-center gap-1.5 bg-[var(--surface)] px-1.5 py-1 rounded-xl border border-[var(--border)]"
                   onClick={(e) => e.stopPropagation()}
                 >
-                {/* 44px Touch Target Decrement Button */}
-                <button
-                  type="button"
-                  onClick={handleStepDecrement}
-                  aria-label={`Decrease ${title}`}
-                  className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95"
-                >
-                  <Minus size={15} strokeWidth={2.5} />
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleStepDecrement}
+                    aria-label={`Decrease ${title}`}
+                    className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95 cursor-pointer"
+                  >
+                    <Minus size={15} strokeWidth={2.5} />
+                  </button>
 
-                {/* Tappable value display / inline 16px number input */}
-                <div className="px-2 text-center select-text">
-                  {isEditingAmount ? (
-                    <input
-                      ref={inputRef}
-                      type="number"
-                      min="0"
-                      max="1000000"
-                      step={stepValue || 1}
-                      value={amountInputVal}
-                      onChange={(e) => setAmountInputVal(e.target.value)}
-                      onBlur={commitAmountInput}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') commitAmountInput()
-                        if (e.key === 'Escape') {
-                          setIsEditingAmount(false)
-                          setAmountInputVal(String(currentAmount))
-                        }
-                      }}
-                      className="w-16 text-center font-mono font-bold bg-[var(--surface-raised)] border border-[var(--accent)] rounded px-1.5 py-1 text-[var(--text-primary)] outline-none"
-                      style={{ fontSize: 16 }} // 16px strictly avoids iOS viewport zooming
-                    />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsEditingAmount(true)}
-                      title="Click to type exact number"
-                      className="font-mono text-xs font-bold transition-opacity hover:opacity-80 min-w-[44px] min-h-[44px] inline-flex items-center justify-center px-2"
-                    >
-                      <span
-                        style={{
-                          color: completed ? resolvedColor : 'var(--text-primary)',
+                  <div className="px-2 text-center select-text tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                    {isEditingAmount ? (
+                      <input
+                        ref={inputRef}
+                        type="number"
+                        min="0"
+                        max="1000000"
+                        step={stepValue || 1}
+                        value={amountInputVal}
+                        onChange={(e) => setAmountInputVal(e.target.value)}
+                        onBlur={commitAmountInput}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitAmountInput()
+                          if (e.key === 'Escape') {
+                            setIsEditingAmount(false)
+                            setAmountInputVal(String(currentAmount))
+                          }
                         }}
+                        className="w-16 text-center font-mono font-bold bg-[var(--surface-raised)] border border-[var(--accent)] rounded px-1.5 py-1 text-[var(--text-primary)] outline-none"
+                        style={{ fontSize: 16 }}
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingAmount(true)}
+                        title="Click to type exact number"
+                        className="font-mono text-xs font-bold transition-opacity hover:opacity-80 min-w-[44px] min-h-[44px] inline-flex items-center justify-center px-1 tabular-nums cursor-pointer"
                       >
-                        {currentAmount}
-                      </span>
-                      {targetAmount != null && (
-                        <span className="text-[var(--text-muted)]">
-                          {' '}
-                          / {targetAmount}
+                        <span style={{ color: completed ? resolvedColor : 'var(--text-primary)' }}>
+                          {currentAmount}
                         </span>
-                      )}
-                      {unit && (
-                        <span className="text-[10px] text-[var(--text-muted)] font-normal ml-1">
-                          {unit}
-                        </span>
-                      )}
-                    </button>
-                  )}
+                        <span className="text-[var(--text-muted)]"> / {targetAmount}</span>
+                        {unit && <span className="text-[10px] text-[var(--text-muted)] font-normal ml-1 truncate">{unit}</span>}
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleStepIncrement}
+                    aria-label={`Increase ${title}`}
+                    className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95 cursor-pointer"
+                  >
+                    <Plus size={15} strokeWidth={2.5} />
+                  </button>
                 </div>
 
-                {/* 44px Touch Target Increment Button */}
-                <button
-                  type="button"
-                  onClick={handleStepIncrement}
-                  aria-label={`Increase ${title}`}
-                  className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95"
-                >
-                  <Plus size={15} strokeWidth={2.5} />
-                </button>
-              </div>
-
-              {/* Play button for time-based amount habits (min / hours) */}
-              {unit && ['min', 'mins', 'minute', 'minutes', 'hours', 'hour', 'hr', 'hrs', 'h', 'm'].includes(unit.toLowerCase().trim()) && (
-                <Link
-                  href={habitId ? `/focus?habitId=${habitId}` : '/focus'}
-                  onClick={(e) => e.stopPropagation()}
-                  title={`Start Focus Timer for ${title}`}
-                  aria-label={`Start Focus Timer for ${title}`}
-                  className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] active:scale-95 shadow-2xs"
-                >
-                  <Play size={16} fill="currentColor" />
-                </Link>
-              )}
-            </>
-          ))}
-
-          {/* Simple Checkbox */}
-          {variant === 'checkbox' && (
-            <div
-              aria-hidden="true"
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200"
-              style={{
-                backgroundColor: completed ? resolvedColor : 'var(--surface)',
-                border: `1.5px solid ${completed ? resolvedColor : 'var(--border)'}`,
-                color: '#FFFFFF',
-              }}
-            >
-              {completed && <Check size={16} strokeWidth={3} />}
-            </div>
-          )}
-
-          {/* Checklist: Subitems Expansion Toggle */}
-          {variant === 'checklist' && subitems.length > 0 && (
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-xs font-bold text-[var(--text-muted)]">
-                {subitems.filter((s) => s.completed).length}/{subitems.length}
-              </span>
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] transition-transform"
-                style={{ transform: subitemsExpanded ? 'rotate(180deg)' : 'none' }}
-              >
-                <ChevronDown size={14} />
-              </div>
-            </div>
-          )}
-
-          {/* Progress / Value Display (e.g. "120/150 min" or actionLabel "+15m") */}
-          {(variant === 'progress' || Boolean(valueDisplay)) &&
-            variant !== 'amount' &&
-            variant !== 'checkbox' &&
-            variant !== 'checklist' && (
-              <div className="flex items-center gap-2">
-                {valueDisplay && (
-                  <span className="font-mono text-xs font-bold text-[var(--text-primary)]">
-                    {valueDisplay}
-                  </span>
-                )}
-                {actionLabel && (
-                  <span className="font-mono text-[10px] font-bold px-2 py-1 rounded-md bg-[var(--surface)] text-[var(--accent)] border border-[var(--border)]">
-                    {actionLabel}
-                  </span>
+                {isTimeHabit && (
+                  <Link
+                    href={habitId ? `/focus?habitId=${habitId}` : '/focus'}
+                    onClick={(e) => e.stopPropagation()}
+                    title={`Start Focus Timer for ${title}`}
+                    aria-label={`Start Focus Timer for ${title}`}
+                    className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white hover:border-[var(--accent)] active:scale-95 shadow-2xs cursor-pointer flex-shrink-0"
+                  >
+                    <Play size={16} fill="currentColor" />
+                  </Link>
                 )}
               </div>
             )}
 
-          {/* Timer button */}
+            {/* Desktop Quick Clock Button */}
+            {onOpenTimer && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onOpenTimer()
+                }}
+                title="Start Focus Timer"
+                aria-label={`Focus Timer for ${title}`}
+                className="hidden sm:flex w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl items-center justify-center border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors cursor-pointer"
+              >
+                <Clock size={16} />
+              </button>
+            )}
+
+            {/* Desktop Quick Skip Button */}
+            {onToggleSkip && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onToggleSkip()
+                }}
+                title={isSkipped ? 'Unskip habit' : 'Skip habit for today'}
+                aria-label={isSkipped ? `Unskip ${title}` : `Skip ${title} for today`}
+                className={`hidden sm:flex w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl items-center justify-center border transition-colors cursor-pointer ${
+                  isSkipped
+                    ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--surface)]'
+                    : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--surface)]'
+                }`}
+              >
+                <Ban size={15} />
+              </button>
+            )}
+
+            {/* "More" Button (...) — Primary 44px Touch Target */}
+            {(onToggleSkip || onOpenTimer || habitId) && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setMoreMenuOpen(true)
+                }}
+                aria-label={`More options for ${title}`}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-95 transition-all cursor-pointer flex-shrink-0"
+              >
+                <MoreHorizontal size={18} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ROW 2 (Mobile only, < 640px / < 480px): Full-width Stepper [-] value / target unit [+] + Play Button */}
+        {variant === 'amount' && targetAmount !== null && (
+          <div
+            className="sm:hidden mt-2.5 pt-2.5 border-t border-[var(--border)]/70 flex items-center gap-2 w-full min-w-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex-1 flex items-center justify-between bg-[var(--surface)] p-1 rounded-xl border border-[var(--border)] min-w-0">
+              <button
+                type="button"
+                onClick={handleStepDecrement}
+                aria-label={`Decrease ${title}`}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] active:scale-95 cursor-pointer flex-shrink-0"
+              >
+                <Minus size={16} strokeWidth={2.5} />
+              </button>
+
+              <div className="px-2 text-center min-w-0 flex-1 truncate select-text tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                {isEditingAmount ? (
+                  <input
+                    ref={inputRef}
+                    type="number"
+                    min="0"
+                    max="1000000"
+                    step={stepValue || 1}
+                    value={amountInputVal}
+                    onChange={(e) => setAmountInputVal(e.target.value)}
+                    onBlur={commitAmountInput}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') commitAmountInput()
+                      if (e.key === 'Escape') {
+                        setIsEditingAmount(false)
+                        setAmountInputVal(String(currentAmount))
+                      }
+                    }}
+                    className="w-full text-center font-mono font-bold bg-[var(--surface-raised)] border border-[var(--accent)] rounded py-1 px-1 text-[var(--text-primary)] outline-none"
+                    style={{ fontSize: 16 }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingAmount(true)}
+                    title="Click to type exact number"
+                    className="font-mono text-xs font-bold min-h-[44px] w-full inline-flex items-center justify-center gap-1 cursor-pointer truncate tabular-nums"
+                  >
+                    <span className="tabular-nums" style={{ color: completed ? resolvedColor : 'var(--text-primary)' }}>
+                      {currentAmount}
+                    </span>
+                    <span className="text-[var(--text-muted)] tabular-nums"> / {targetAmount}</span>
+                    {unit && (
+                      <span className="text-[10px] text-[var(--text-muted)] font-normal ml-0.5 truncate">
+                        {unit}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleStepIncrement}
+                aria-label={`Increase ${title}`}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-lg flex items-center justify-center transition-all bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] active:scale-95 cursor-pointer flex-shrink-0"
+              >
+                <Plus size={16} strokeWidth={2.5} />
+              </button>
+            </div>
+
+            {/* Play button for time habits on row 2 */}
+            {isTimeHabit && (
+              <Link
+                href={habitId ? `/focus?habitId=${habitId}` : '/focus'}
+                onClick={(e) => e.stopPropagation()}
+                title={`Start Focus Timer for ${title}`}
+                aria-label={`Start Focus Timer for ${title}`}
+                className="w-11 h-11 min-w-[44px] min-h-[44px] rounded-xl flex items-center justify-center flex-shrink-0 bg-[var(--surface-raised)] border border-[var(--border)] text-[var(--accent)] hover:bg-[var(--accent)] hover:text-white transition-all active:scale-95 shadow-2xs cursor-pointer"
+              >
+                <Play size={16} fill="currentColor" />
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* "More" Action Bottom Sheet on Phones */}
+      <ResponsiveSheet
+        isOpen={moreMenuOpen}
+        onClose={() => setMoreMenuOpen(false)}
+        title={title}
+        description={subtitle || 'Habit Actions'}
+      >
+        <div className="p-4 space-y-2.5 font-mono">
           {onOpenTimer && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation()
+              onClick={() => {
+                setMoreMenuOpen(false)
                 onOpenTimer()
               }}
-              title="Start Focus Timer"
-              className="w-8 h-8 rounded-lg flex items-center justify-center border border-[var(--border)] bg-[var(--surface)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors"
+              className="w-full flex items-center justify-between p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-98 transition-all min-h-[48px] text-xs font-bold cursor-pointer"
             >
-              <Clock size={13} />
+              <div className="flex items-center gap-3">
+                <Clock size={16} className="text-[var(--accent)]" />
+                <span>Start Focus Timer</span>
+              </div>
+              <ArrowRight size={14} className="text-[var(--text-muted)]" />
             </button>
           )}
 
-          {/* Skip button */}
           {onToggleSkip && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation()
+              onClick={() => {
+                setMoreMenuOpen(false)
                 onToggleSkip()
               }}
-              title={isSkipped ? 'Unskip habit' : 'Skip habit for today'}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-colors ${
-                isSkipped
-                  ? 'border-[var(--accent)] text-[var(--accent)] bg-[var(--surface)]'
-                  : 'border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] bg-[var(--surface)]'
-              }`}
+              className="w-full flex items-center justify-between p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-98 transition-all min-h-[48px] text-xs font-bold cursor-pointer"
             >
-              <Ban size={13} />
+              <div className="flex items-center gap-3">
+                <Ban size={16} className={isSkipped ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'} />
+                <span>{isSkipped ? 'Unskip habit (make active today)' : 'Skip habit for today'}</span>
+              </div>
+              <ArrowRight size={14} className="text-[var(--text-muted)]" />
             </button>
           )}
+
+          {habitId && (
+            <Link
+              href={`/habits/${habitId}`}
+              onClick={() => setMoreMenuOpen(false)}
+              className="w-full flex items-center justify-between p-3.5 rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] text-[var(--text-primary)] hover:border-[var(--accent)] active:scale-98 transition-all min-h-[48px] text-xs font-bold"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px]">i</div>
+                <span>View Habit History & Details</span>
+              </div>
+              <ArrowRight size={14} className="text-[var(--text-muted)]" />
+            </Link>
+          )}
         </div>
-      </div>
+      </ResponsiveSheet>
 
       {/* Subitems Drawer for Checklist habits */}
       <AnimatePresence>

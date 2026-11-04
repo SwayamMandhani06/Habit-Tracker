@@ -82,7 +82,7 @@ export function WeeklyIntention({ initialIntention = '' }: Props) {
 
   return (
     <div className="flex flex-col mb-4">
-      <div className="flex items-center gap-2 font-mono text-xs text-[var(--text-muted)] py-1.5 border-b border-[var(--border)]">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 font-mono text-xs text-[var(--text-muted)] py-1.5 border-b border-[var(--border)] min-w-0">
         <span className="shrink-0 tracking-wider text-[0.68rem] uppercase font-medium text-[var(--text-muted)]">
           THIS WEEK&apos;S INTENTION:
         </span>
@@ -103,7 +103,7 @@ export function WeeklyIntention({ initialIntention = '' }: Props) {
             }
           }}
           placeholder="Set your focus or commitment for this week..."
-          className="flex-1 bg-transparent border-0 border-b border-transparent focus:border-[var(--accent)] focus:outline-none focus:ring-0 px-1 py-0.5 font-mono text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] placeholder:opacity-40 transition-colors"
+          className="w-full sm:flex-1 min-w-0 bg-transparent border-0 border-b border-transparent focus:border-[var(--accent)] focus:outline-none focus:ring-0 px-1 py-0.5 font-mono text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] placeholder:opacity-40 transition-colors"
         />
       </div>
       {errorMsg && (

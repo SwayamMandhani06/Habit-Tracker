@@ -1,6 +1,5 @@
 'use client'
 // components/nav/Sidebar.tsx — Desktop sidebar with refined tokens & states
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { NAV_ITEMS } from '@/lib/nav'
@@ -8,21 +7,31 @@ import { useTheme } from '@/components/providers/ThemeProvider'
 import { ThemeToggle } from './ThemeToggle'
 import { LogOut } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { clearOfflineQueue } from '@/lib/offline-queue'
 
-export function Sidebar() {
+interface SidebarProps {
+  userEmail?: string | null
+}
+
+export function Sidebar({ userEmail = null }: SidebarProps) {
   const pathname = usePathname()
   const { theme, toggleTheme } = useTheme()
   const router = useRouter()
-  const [userEmail, setUserEmail] = useState<string | null>(null)
-
-  useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user?.email) setUserEmail(user.email)
-    })
-  }, [])
 
   const handleSignOut = async () => {
+    // 1. Clear offline mutation queue
+    clearOfflineQueue()
+
+    // 2. Delete all runtime caches
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      try {
+        const keys = await window.caches.keys()
+        await Promise.all(keys.map((k) => window.caches.delete(k)))
+      } catch (err) {
+        console.warn('[Sidebar] Failed to clear caches on sign out:', err)
+      }
+    }
+
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
@@ -46,8 +55,8 @@ export function Sidebar() {
         justifyContent: 'space-between',
         borderRight: '1px solid var(--border)',
         backgroundColor: 'var(--bg)',
-        backgroundImage: 'radial-gradient(circle, var(--dot-color) 1px, transparent 1px)',
-        backgroundSize: '20px 20px',
+        backgroundImage: 'radial-gradient(circle, var(--dot-color) 1.5px, transparent 1.5px)',
+        backgroundSize: '24px 24px',
         boxShadow: 'none',
       }}
     >

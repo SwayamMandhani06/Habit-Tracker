@@ -49,7 +49,7 @@ export function SettingsClient({ habits, quotes, userEmail }: Props) {
   const isDark = theme === 'dark'
 
   return (
-    <div className="page-container" style={{ maxWidth: 780, margin: '0 auto', paddingBottom: 64 }}>
+    <div className="page-container" style={{ maxWidth: 780, margin: '0 auto', paddingBottom: 'calc(64px + var(--safe-bottom))' }}>
       {/* Path Breadcrumb */}
       <motion.p
         className="text-path"
@@ -87,11 +87,14 @@ export function SettingsClient({ habits, quotes, userEmail }: Props) {
 
       {/* Tabs */}
       <div
+        className="no-scrollbar"
         style={{
           display: 'flex',
           gap: 4,
           marginBottom: 28,
           borderBottom: '1px solid var(--border)',
+          overflowX: 'auto',
+          maxWidth: '100%',
         }}
       >
         {TABS.map((t) => (
@@ -99,7 +102,7 @@ export function SettingsClient({ habits, quotes, userEmail }: Props) {
             key={t.id}
             onClick={() => setTab(t.id)}
             style={{
-              padding: '10px 18px',
+              padding: '10px 14px',
               border: 'none',
               borderBottom: `2px solid ${tab === t.id ? 'var(--accent)' : 'transparent'}`,
               background: 'transparent',
@@ -111,6 +114,8 @@ export function SettingsClient({ habits, quotes, userEmail }: Props) {
               cursor: 'pointer',
               transition: 'all 0.15s ease',
               marginBottom: -1,
+              whiteSpace: 'nowrap',
+              flexShrink: 0,
             }}
           >
             {t.label}

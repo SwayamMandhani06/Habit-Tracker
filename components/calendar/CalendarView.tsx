@@ -13,7 +13,7 @@ interface Props {
   today: string
 }
 
-const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
@@ -82,10 +82,10 @@ export function CalendarView({ scores, habits, today }: Props) {
     }
   }
 
-  // Week days calculation via pure date module (Sunday start: weekStartsOn = 0)
+  // Week days calculation via pure date module (Monday start: weekStartsOn = 1)
   const weekDays = useMemo(() => {
     const centerDate = weekOffset === 0 ? today : addDays(today, weekOffset * 7)
-    const dates = weekDates(centerDate, 0)
+    const dates = weekDates(centerDate, 1)
 
     return dates.map((dateStr, i) => {
       const monthIndex = Number(dateStr.slice(5, 7)) - 1
@@ -104,12 +104,13 @@ export function CalendarView({ scores, habits, today }: Props) {
     })
   }, [today, weekOffset, scoreMap])
 
-  // Month days calculation
-  const firstDay = new Date(year, month, 1).getDay()
+  // Month days calculation (Monday start: (getDay() + 6) % 7)
+  const rawFirstDay = new Date(year, month, 1).getDay()
+  const firstDay = (rawFirstDay + 6) % 7
   const { daysInMonth } = getMonthDateRange(year, month + 1)
 
   return (
-    <div className="page-container" style={{ maxWidth: 940, margin: '0 auto', paddingBottom: 64 }}>
+    <div className="page-container" style={{ maxWidth: 940, margin: '0 auto', paddingBottom: 'calc(64px + var(--safe-bottom))' }}>
       {/* Breadcrumb */}
       <motion.p
         className="text-path"
@@ -468,7 +469,8 @@ export function CalendarView({ scores, habits, today }: Props) {
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
         >
           {MONTHS.map((mName, mIdx) => {
-            const mFirstDay = new Date(year, mIdx, 1).getDay()
+            const rawMFirstDay = new Date(year, mIdx, 1).getDay()
+            const mFirstDay = (rawMFirstDay + 6) % 7
             const { daysInMonth: mDaysCount } = getMonthDateRange(year, mIdx + 1)
 
             return (

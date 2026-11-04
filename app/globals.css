@@ -8,6 +8,10 @@
 
 /* ── Design Tokens ────────────────────────────────────────────────────────── */
 :root {
+  /* Safe Area Insets (fallback 0px) — ONLY these variables may be used elsewhere */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
   --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
   --font-serif: 'Instrument Serif', Georgia, serif;
 
@@ -17,11 +21,12 @@
   --surface: #F0EDE8;
   --surface-raised: #E8E4DE;
   --text-primary: #1C1A17;
-  --text-muted: #8C8580;
+  --text-muted: #66605B;
   --accent: #5C6B5A;
+  --accent-fg: #FFFFFF;
   --accent-light: #8BA888;
   --border: rgba(0, 0, 0, 0.08);
-  --dot-color: rgba(28, 25, 20, 0.09);
+  --dot-color: rgba(28, 25, 20, 0.12);
   --color-danger: #8B4141;
 
   /* Semantic Aliases for compatibility */
@@ -74,17 +79,20 @@
 }
 
 /* ── Dark Mode ────────────────────────────────────────────────────────────── */
-[data-theme="dark"] {
+[data-theme="dark"],
+html.dark,
+.dark {
   --bg: #1A1815;
   --bg-rgb: 26, 24, 21;
   --surface: #232018;
   --surface-raised: #2C2820;
   --text-primary: #F0EDE8;
-  --text-muted: #6B6560;
+  --text-muted: #9E9790;
   --accent: #7AA080;
+  --accent-fg: #121512;
   --accent-light: #8BA888;
   --border: rgba(255, 255, 255, 0.08);
-  --dot-color: rgba(245, 242, 236, 0.20);
+  --dot-color: rgba(245, 242, 236, 0.22);
   --color-danger: #E06C6C;
 
   --bg-base: var(--bg);
@@ -164,18 +172,16 @@
     overflow-x: hidden;
     max-width: 100vw;
 
-    /* Dotted notebook paper texture */
-    background-image: radial-gradient(circle,
-        var(--dot-color) 1.2px,
-        transparent 1.2px);
-    background-size: 20px 20px;
+    /* Dotted notebook paper texture: 1.5px radius, 24px spacing, identical in both themes */
+    background-image: radial-gradient(circle, var(--dot-color) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
   }
 
-  [data-theme="dark"] body {
-    background-image:
-      radial-gradient(circle, var(--dot-color) 1.2px, transparent 1.2px),
-      radial-gradient(ellipse 70% 40% at 50% 15%, rgba(122, 160, 128, 0.09), transparent 70%);
-    background-size: 20px 20px, 100% 100%;
+  [data-theme="dark"] body,
+  html.dark body,
+  .dark body {
+    background-image: radial-gradient(circle, var(--dot-color) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
   }
 }
 
@@ -285,9 +291,10 @@
     flex-direction: column;
     border-right: 1px solid var(--border-default);
     background: var(--bg-base);
-    /* Same dot texture on sidebar */
-    background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
-    background-size: 20px 20px;
+    /* Same dot texture on sidebar: 1.5px radius, 24px spacing */
+    background-image: radial-gradient(circle, var(--dot-color) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
+    padding-top: var(--safe-top);
   }
 
   @media (max-width: 1023px) {
@@ -300,7 +307,7 @@
     flex: 1;
     overflow-y: auto;
     min-height: 100dvh;
-    padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(96px + var(--safe-bottom));
     font-size: 17px;
   }
 
@@ -318,7 +325,7 @@
   .app-bottom-bar {
     display: none;
     position: fixed;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(12px + var(--safe-bottom));
     left: 12px;
     right: 12px;
     max-width: 460px;
@@ -344,12 +351,12 @@
   .page-container {
     max-width: 860px;
     margin: 0 auto;
-    padding: 36px 28px;
+    padding: calc(36px + var(--safe-top)) 28px calc(48px + var(--safe-bottom));
   }
 
   @media (max-width: 640px) {
     .page-container {
-      padding: 22px 18px;
+      padding: calc(20px + var(--safe-top)) 18px calc(40px + var(--safe-bottom));
     }
   }
 
@@ -676,8 +683,8 @@
     inset: 0;
     pointer-events: none;
     z-index: 0;
-    background-image: radial-gradient(circle, var(--dot-color) 1px, transparent 1px);
-    background-size: 20px 20px;
+    background-image: radial-gradient(circle, var(--dot-color) 1.5px, transparent 1.5px);
+    background-size: 24px 24px;
   }
 
   .homepage-cursor-trail {

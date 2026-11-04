@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: '1% Better',
     short_name: '1% Better',
     description: 'Personal habit and discipline tracker. Getting 1% better every day.',
-    start_url: '/',
+    start_url: '/today',
     display: 'standalone',
     background_color: '#F7F5F2',
     theme_color: '#1A1815',
