@@ -28,18 +28,18 @@ export default function LoginPage() {
     let active = true
 
     async function initAuth() {
-      if (typeof window !== 'undefined') {
-        const params = new URLSearchParams(window.location.search)
+      const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+      if (typeof window !== 'undefined' && searchParams) {
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''))
-        const errorDesc = params.get('error_description') || hashParams.get('error_description') || params.get('error')
+        const errorDesc = searchParams.get('error_description') || hashParams.get('error_description') || searchParams.get('error')
         if (errorDesc) {
           setError(decodeURIComponent(errorDesc).replace(/\+/g, ' '))
         }
 
-        if (params.get('mode') === 'signup') {
+        if (searchParams.get('mode') === 'signup') {
           setMode('signup')
         }
-        if (params.get('switch') === '1') {
+        if (searchParams.get('switch') === '1') {
           await supabase.auth.signOut()
           if (active) setCheckingSession(false)
           return
@@ -48,7 +48,8 @@ export default function LoginPage() {
 
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        router.push('/dashboard')
+        const fromTarget = searchParams?.get('from') || '/today'
+        router.push(fromTarget)
       } else if (active) {
         setCheckingSession(false)
       }
@@ -86,7 +87,9 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
-      router.push('/dashboard')
+      const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+      const fromTarget = searchParams?.get('from') || '/today'
+      router.push(fromTarget)
       router.refresh()
     } else {
       const { data, error } = await supabase.auth.signUp({
@@ -111,20 +114,27 @@ export default function LoginPage() {
         await supabase.auth.signInWithPassword({ email, password })
       }
 
-      // Auto-seed for new user
+      // Auto-seed for new user via atomic RPC
       if (data.user) {
         try {
-          await fetch('/api/seed', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          })
-        } catch {
-          // Seed failure is non-fatal
+          const { data: seedData, error: seedError } = await supabase.rpc('seed_default_data')
+          if (seedError) {
+            console.error('[Signup] seed_default_data failed:', {
+              code: seedError.code,
+              message: seedError.message,
+              details: seedError.details,
+              hint: seedError.hint,
+            })
+          } else {
+            console.log('[Signup] seed_default_data succeeded:', seedData)
+          }
+        } catch (rpcErr) {
+          console.error('[Signup] Exception calling seed_default_data:', rpcErr)
         }
       }
 
-      // Redirect directly to /dashboard without waiting for email confirmation
-      router.push('/dashboard')
+      // Redirect directly to /today without waiting for email confirmation
+      router.push('/today')
       router.refresh()
       setLoading(false)
     }
@@ -177,7 +187,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div style={{
+    <main style={{
       minHeight: '100dvh',
       display: 'flex',
       flexDirection: 'column',
@@ -333,13 +343,14 @@ export default function LoginPage() {
                 type="button"
                 onClick={() => setShowPassword(s => !s)}
                 style={{
-                  position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                  position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
                   background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--ink-tertiary)', display: 'flex', padding: 0,
+                  color: 'var(--ink-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: '44px', height: '44px', minWidth: '44px', minHeight: '44px', padding: 0,
                 }}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
@@ -455,6 +466,6 @@ export default function LoginPage() {
           </a>
         </p>
       </motion.div>
-    </div>
+    </main>
   )
 }

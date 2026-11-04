@@ -21,8 +21,9 @@ Designed in an editorial paper-and-terminal aesthetic: monospace typography, hai
   - *Habits Compared & Consistency*: Donut volume distribution, habit ranking velocities, 30-day consistency gauge, and day-of-week bar charts.
 
 ### 2. Multi-Tenant Security & Supabase Row Level Security (RLS)
-- Full multi-user isolation powered by PostgreSQL RLS (`auth.uid() = user_id`) across all tables and security-invoker views (`daily_scores`, `habit_monthly_stats`).
-- Seamless Supabase Authentication supporting Email/Password and OAuth with automatic token refresh in Next.js middleware.
+- Full multi-user isolation powered by PostgreSQL RLS (`auth.uid() = user_id`) across all tables.
+- Pure scoring engine in `lib/scoring` computes streaks, percentages, and period averages without database views or write-on-read side effects.
+- Seamless Supabase Authentication supporting Email/Password with automatic session refresh in Next.js middleware.
 
 ### 3. Flexible Habit System
 - **Checkbox & Multi-Step Checklist Habits**: Subitems auto-sync with the parent habit.
@@ -130,32 +131,43 @@ Create `.env.local` using the provided template:
 cp .env.local.example .env.local
 ```
 
-Fill in your Supabase credentials:
+Fill in the required public environment variables:
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
-# Timezone is automatically detected from the client browser and synced to user profile
-# Resolution order: user_metadata.timezone -> x-user-timezone cookie -> x-vercel-ip-timezone header -> UTC
 ```
 
-> **Note:** Timezone is resolved dynamically per user via client detection, browser cookie, and edge headers. This ensures server-rendered dates match your local calendar anywhere in the world.
+> **Security & Test Rule:** Never place secret keys or service role keys in `.env.local` or application code. Automated tests never create or delete users on production projects.
 
-### 3. Run Database Migrations
+> **Timezone Resolution:** Timezone is resolved dynamically per user (client sync cookie `x-user-timezone`, edge headers `x-vercel-ip-timezone`, and fallback to UTC). Server-rendered dates match the user's local day.
 
-In your Supabase project's **SQL Editor**, execute the migration files located in `supabase/migrations/`:
-- `001_initial_schema.sql` through `009_fix_views_rls_and_skips.sql`
-- Or run `999_ensure_all_columns_and_reload_cache.sql` to apply all schema updates and reload PostgREST in one step.
+### 3. Database Schema & Migrations
 
-### 4. Start Development Server
+- **Fresh Setup**: Execute `supabase/baseline.sql` in the Supabase SQL editor to create the entire schema, tables, foreign keys, RLS policies, and seed functions.
+- **Incremental Upgrades on Live Database**: Execute migration files in numerical order:
+  1. `014_reconcile_live_schema.sql` (enforces `NOT NULL user_id`, deduplicates `day_entries` unique index, and ensures RLS across all tables)
+  2. `015_seed_function.sql` (self-healing default seed function with strict `user_id` scoping)
+  3. **Deploy the application code**
+  4. `016_drop_views.sql` (drops deprecated database views `daily_scores` and `habit_monthly_stats` **only after** deploying the application that computes metrics in `lib/scoring`)
+
+### 4. Supabase & Vercel Settings Checklist
+
+- **Supabase Region**: Deploy in `ap-south-1` (Mumbai, India).
+- **Vercel Region**: Set Serverless Function Region to `bom1` (Mumbai, India) to co-locate compute and database for sub-millisecond query latencies.
+- **Supabase Auth Configuration**:
+  - **Confirm Email**: Turn **OFF** (Authentication → Providers → Email → uncheck "Confirm email") for instantaneous, low-friction signup.
+  - **Site URL**: `https://your-domain.vercel.app`
+  - **Redirect URLs**: Add `https://your-domain.vercel.app/auth/callback` and `http://localhost:3000/auth/callback`.
+
+### 5. Start Development Server
 
 ```bash
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) to view the homepage or log in.
+Visit [http://localhost:3000](http://localhost:3000) to view the application.
 
 ---
 
@@ -163,14 +175,16 @@ Visit [http://localhost:3000](http://localhost:3000) to view the homepage or log
 
 ### Vercel Deployment
 1. Connect your repository to [Vercel](https://vercel.com).
-2. In Project Settings → **Environment Variables**, add the variables from `.env.local`.
-3. In Supabase Dashboard → **Authentication** → **URL Configuration**:
-   - Set **Site URL** to your production domain: `https://your-app.vercel.app`
-   - Add `https://your-app.vercel.app/auth/callback` to **Redirect URLs**.
-4. Deploy.
+2. Set Function Region to **`bom1` (Mumbai)** in Project Settings → Functions.
+3. In Project Settings → **Environment Variables**, configure:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `NEXT_PUBLIC_SITE_URL`
+4. Deploy the application.
+5. In Supabase SQL Editor, run `supabase/migrations/016_drop_views.sql` to clean up old views.
 
 ### Progressive Web App (PWA)
-Open the deployed URL on mobile Safari (iOS) or Chrome (Android) and choose **"Add to Home Screen"** for standalone app mode.
+Open the deployed URL on mobile Safari (iOS) or Chrome (Android) and choose **"Add to Home Screen"** for standalone app mode with offline mutation queue support.
 
 ---
 
